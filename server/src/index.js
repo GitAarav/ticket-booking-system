@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { pool } = require('./db/pool');
+const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL }));
@@ -11,6 +13,9 @@ app.get('/health', async (req, res) => {
   await pool.query('SELECT 1');
   res.json({ status: 'ok' });
 });
+
+app.use('/auth', authRoutes);
+app.use('/admin', adminRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
