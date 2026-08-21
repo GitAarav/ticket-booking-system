@@ -4,6 +4,7 @@ const { asyncHandler } = require('../middleware/asyncHandler');
 const venueService = require('../services/venueService');
 
 const router = express.Router();
+const MAX_BULK_SEATS = 500;
 
 router.use(authenticate, roleGuard('admin'));
 
@@ -44,6 +45,10 @@ router.patch('/venues/:venueId', loadOwnedVenue, asyncHandler(async (req, res) =
 }));
 
 router.delete('/venues/:venueId', loadOwnedVenue, asyncHandler(async (req, res) => {
+  const showCount = await venueService.countShowsForVenue(req.params.venueId);
+  if (showCount > 0) {
+    return res.status(409).json({ error: `venue has ${showCount} show(s) scheduled; cancel or reassign them first` });
+  }
   await venueService.deleteVenue(req.params.venueId);
   res.status(204).send();
 }));
@@ -65,6 +70,25 @@ router.post('/venues/:venueId/seats/bulk', loadOwnedVenue, asyncHandler(async (r
   if (!Array.isArray(seats) || seats.length === 0) {
     return res.status(400).json({ error: 'seats must be a non-empty array' });
   }
+  if (seats.length > MAX_BULK_SEATS) {
+    return res.status(400).json({ error: `cannot create more than ${MAX_BULK_SEATS} seats in one request` });
+  }
+
+  const categories = await venueService.listCategories(req.params.venueId);
+  const validCategoryIds = new Set(categories.map((c) => c.id));
+
+  for (const [index, seat] of seats.entries()) {
+    if (!validCategoryIds.has(seat.categoryId)) {
+      return res.status(400).json({ error: `seat[${index}]: categoryId does not belong to this venue` });
+    }
+    if (typeof seat.rowLabel !== 'string' || seat.rowLabel.trim() === '') {
+      return res.status(400).json({ error: `seat[${index}]: rowLabel must be a non-empty string` });
+    }
+    if (!Number.isInteger(seat.seatNumber) || seat.seatNumber < 1) {
+      return res.status(400).json({ error: `seat[${index}]: seatNumber must be a positive integer` });
+    }
+  }
+
   const created = await venueService.bulkCreateSeats(req.params.venueId, seats);
   res.status(201).json({ seats: created });
 }));

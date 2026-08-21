@@ -32,4 +32,9 @@ function issueToken(user) {
   );
 }
 
-module.exports = { createUser, findUserByEmail, verifyPassword, issueToken };
+function toSafeUser(user) {
+  const { password_hash, ...safeUser } = user;
+  return safeUser;
+}
+
+module.exports = { createUser, findUserByEmail, verifyPassword, issueToken, toSafeUser };

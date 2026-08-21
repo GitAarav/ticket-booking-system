@@ -30,6 +30,14 @@ async function updateVenue(id, { name, address }) {
   return rows[0];
 }
 
+async function countShowsForVenue(venueId) {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM shows WHERE venue_id = $1`,
+    [venueId]
+  );
+  return rows[0].count;
+}
+
 async function deleteVenue(id) {
   await pool.query(`DELETE FROM venues WHERE id = $1`, [id]);
 }
@@ -105,6 +113,7 @@ module.exports = {
   getVenue,
   updateVenue,
   deleteVenue,
+  countShowsForVenue,
   createCategory,
   listCategories,
   bulkCreateSeats,
