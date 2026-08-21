@@ -1,10 +1,11 @@
 const express = require('express');
 const { createUser, findUserByEmail, verifyPassword, issueToken } = require('../services/authService');
 const { authenticate } = require('../middleware/roleGuard');
+const { asyncHandler } = require('../middleware/asyncHandler');
 
 const router = express.Router();
 
-router.post('/register', async (req, res) => {
+router.post('/register', asyncHandler(async (req, res) => {
   const { name, email, password, role } = req.body;
   if (!name || !email || !password || !role) {
     return res.status(400).json({ error: 'name, email, password, and role are required' });
@@ -21,9 +22,9 @@ router.post('/register', async (req, res) => {
   const user = await createUser({ name, email, password, role });
   const token = issueToken(user);
   res.status(201).json({ user, token });
-});
+}));
 
-router.post('/login', async (req, res) => {
+router.post('/login', asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'email and password are required' });
@@ -37,7 +38,7 @@ router.post('/login', async (req, res) => {
   const token = issueToken(user);
   const { password_hash, ...safeUser } = user;
   res.json({ user: safeUser, token });
-});
+}));
 
 router.get('/me', authenticate, (req, res) => {
   res.json({ user: req.user });

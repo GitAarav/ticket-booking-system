@@ -17,6 +17,11 @@ app.get('/health', async (req, res) => {
 app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
 
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'internal server error' });
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
