@@ -5,6 +5,7 @@ const { pool } = require('./db/pool');
 const { asyncHandler } = require('./middleware/asyncHandler');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
+const organiserRoutes = require('./routes/organiser');
 
 const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL }));
@@ -17,6 +18,7 @@ app.get('/health', asyncHandler(async (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
+app.use('/organiser', organiserRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
