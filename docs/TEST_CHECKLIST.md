@@ -43,6 +43,14 @@ What's been verified, how, and the actual result — not a vibe check. Updated a
 - [x] `show_pricing` correctly shows Premium ₹500 / Standard ₹300
 - [x] Creating a show with pricing missing for one category → `400`, rejected, and confirmed **zero** stray `shows` rows were left behind (transaction correctness)
 
+## Checkpoint 4 — Customer browse & seat map read
+
+- [x] `GET /customer/events?type=movie` → returns Inception; `?type=concert` → returns empty array (no false positives)
+- [x] `GET /customer/events?search=incep` → matches "Inception" via partial, case-insensitive search
+- [x] `GET /customer/events/:eventId/shows` → returns the show with venue name/address joined in
+- [x] `GET /customer/shows/:showId` → returns event info + venue info + both category prices, correctly combined
+- [x] `GET /customer/shows/:showId/seatmap` → 40 seats, all `status: "available"`, grouped by row, each seat tagged with its category — reads live `show_seats`, not the static `venue_seats` blueprint
+
 ## Not yet reached
 
-Checkpoints 4–12 (customer browsing, concurrency hold/confirm, TTL sweep, waitlist, QR/email, real-time, API contract freeze, deploy) — see `ORCHESTRATION.md` for what each will need to verify.
+Checkpoints 5–12 (concurrency hold/confirm, TTL sweep, waitlist, QR/email, real-time, API contract freeze, deploy) — see `ORCHESTRATION.md` for what each will need to verify.

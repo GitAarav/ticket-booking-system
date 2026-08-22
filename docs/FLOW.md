@@ -71,6 +71,29 @@ Client (organiser token)
 
 `loadOwnedEvent` middleware works the same way as `loadOwnedVenue` — 404/403 before the route body runs, so handlers don't re-check ownership themselves.
 
+## Customer: browsing & the live seat map (Checkpoint 4)
+
+```
+Client (customer token)
+  → GET /customer/events?type=...&search=...
+       → eventService.searchEvents()
+            (JOINs events → shows, so only events with at least one
+             scheduled show are returned — nothing unbookable shows up)
+  → GET /customer/events/:eventId/shows
+       → eventService.listShowsForEvent()   (joins in venue name/address)
+  → GET /customer/shows/:showId
+       → eventService.getShowDetail()       (show + event + venue + pricing,
+                                               combined into one response)
+  → GET /customer/shows/:showId/seatmap
+       → eventService.getShowSeatmap()
+            reads show_seats (NOT venue_seats — this is the live,
+            per-show copy created back in Checkpoint 3's createShow()),
+            joined with venue_seats for row/position and
+            venue_categories for the category name, grouped by row
+```
+
+This is the first response in the system that includes a live `status` field per seat (`available` / `held` / `booked`). Right now everything reads `available` because nothing writes any other status yet — that starts at Checkpoint 5.
+
 ## Not yet built
 
-The customer-facing seat hold → confirm → TTL sweep → waitlist → QR/email flow (Checkpoints 4–9) doesn't exist in code yet. Once it does, this file gets a new section tracing `attemptSeatTransition()` — the single function every seat-status change must go through (see `CONSTRAINTS.md`).
+The seat hold → confirm → TTL sweep → waitlist → QR/email flow (Checkpoints 5–9) doesn't exist in code yet. Once it does, this file gets a new section tracing `attemptSeatTransition()` — the single function every seat-status change must go through (see `CONSTRAINTS.md`).

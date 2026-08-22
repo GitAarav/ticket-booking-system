@@ -56,9 +56,10 @@ Commit message style: `type: short description`, one logical change per commit, 
 - **Verify:** `show_seats` row count == `venue_seats` row count after show creation.
 - Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
-**Checkpoint 4 — Customer: browse & seat map read**
+**Checkpoint 4 — Customer: browse & seat map read — ✅ done**
 - `11` event listing/filters · `12` show seatmap read
 - **Verify:** filter events, open a show, returned seatmap matches DB state.
+- Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
 **Checkpoint 5 — Core concurrency: hold & confirm (test-first)**
 - `13` concurrency test first (N parallel requests, one seat, assert exactly 1 succeeds — red)
