@@ -77,4 +77,93 @@ async function getShow(id) {
   return rows[0];
 }
 
-module.exports = { createEvent, listEvents, getEvent, createShow, listShows, getShow };
+async function searchEvents({ type, search }) {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT e.*
+     FROM events e
+     JOIN shows s ON s.event_id = e.id
+     WHERE ($1::text IS NULL OR e.type = $1)
+       AND ($2::text IS NULL OR e.title ILIKE '%' || $2 || '%')
+     ORDER BY e.created_at DESC`,
+    [type || null, search || null]
+  );
+  return rows;
+}
+
+async function listShowsForEvent(eventId) {
+  const { rows } = await pool.query(
+    `SELECT s.*, v.name AS venue_name, v.address AS venue_address
+     FROM shows s
+     JOIN venues v ON v.id = s.venue_id
+     WHERE s.event_id = $1
+     ORDER BY s.show_date, s.show_time`,
+    [eventId]
+  );
+  return rows;
+}
+
+async function getShowDetail(showId) {
+  const { rows } = await pool.query(
+    `SELECT s.id, s.show_date, s.show_time,
+            e.title, e.type, e.description,
+            v.id AS venue_id, v.name AS venue_name, v.address AS venue_address
+     FROM shows s
+     JOIN events e ON e.id = s.event_id
+     JOIN venues v ON v.id = s.venue_id
+     WHERE s.id = $1`,
+    [showId]
+  );
+  const show = rows[0];
+  if (!show) return null;
+
+  const { rows: pricing } = await pool.query(
+    `SELECT vc.id AS category_id, vc.name AS category_name, sp.price
+     FROM show_pricing sp
+     JOIN venue_categories vc ON vc.id = sp.category_id
+     WHERE sp.show_id = $1`,
+    [showId]
+  );
+
+  return { ...show, pricing };
+}
+
+async function getShowSeatmap(showId) {
+  const { rows } = await pool.query(
+    `SELECT ss.id, ss.status, vs.row_label, vs.seat_number, vs.pos_x, vs.pos_y,
+            vc.id AS category_id, vc.name AS category_name
+     FROM show_seats ss
+     JOIN venue_seats vs ON vs.id = ss.venue_seat_id
+     JOIN venue_categories vc ON vc.id = ss.category_id
+     WHERE ss.show_id = $1
+     ORDER BY vs.row_label, vs.seat_number`,
+    [showId]
+  );
+
+  const byRow = {};
+  for (const seat of rows) {
+    if (!byRow[seat.row_label]) byRow[seat.row_label] = [];
+    byRow[seat.row_label].push({
+      id: seat.id,
+      seatNumber: seat.seat_number,
+      posX: seat.pos_x,
+      posY: seat.pos_y,
+      status: seat.status,
+      category: { id: seat.category_id, name: seat.category_name },
+    });
+  }
+
+  return Object.entries(byRow).map(([rowLabel, seats]) => ({ rowLabel, seats }));
+}
+
+module.exports = {
+  createEvent,
+  listEvents,
+  getEvent,
+  createShow,
+  listShows,
+  getShow,
+  searchEvents,
+  listShowsForEvent,
+  getShowDetail,
+  getShowSeatmap,
+};
