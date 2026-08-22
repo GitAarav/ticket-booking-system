@@ -34,23 +34,27 @@ Commit message style: `type: short description`, one logical change per commit, 
 
 ### Phase A — Backend & Infra
 
-**Checkpoint 0 — Docs + scaffold + schema**
+**Checkpoint 0 — Docs + scaffold + schema — ✅ done**
 - `1` this docs/ trio (requirements, system design, orchestration) — written before any app code
 - `2` repo scaffold: `/server`, `/client`, `.gitignore`, `.env.example`, README skeleton
 - `3` DB schema/migrations (all tables from `SYSTEM_DESIGN.md`)
 - **Verify:** migrations run clean against Neon Postgres; `\dt` lists every table; FKs resolve.
+- Verified against local Postgres instead (see `DECISIONS.md`); full results in `TEST_CHECKLIST.md`.
 
-**Checkpoint 1 — Auth & roles**
+**Checkpoint 1 — Auth & roles — ✅ done**
 - `4` register/login, bcrypt hash, JWT issue · `5` `roleGuard(role)` middleware
 - **Verify:** register one user per role, log in, hit a guarded route with wrong role → 403, right role → 200.
+- Results in `TEST_CHECKLIST.md`. Hardened post-launch: public registration restricted to customer/organiser only (`DECISIONS.md`).
 
-**Checkpoint 2 — Admin: venue & seat layout**
+**Checkpoint 2 — Admin: venue & seat layout — ✅ done**
 - `6` venue + category CRUD · `7` bulk seat create + seatmap read
 - **Verify:** create venue, 2 categories, bulk-insert 40 seats, `GET` seatmap returns full grid correctly.
+- Results in `TEST_CHECKLIST.md`. Self-audited afterward — 7 real fixes applied (validation limits, FK-safety, auth hardening); see `DECISIONS.md`.
 
-**Checkpoint 3 — Organiser: events, shows, pricing**
+**Checkpoint 3 — Organiser: events, shows, pricing — ✅ done**
 - `8` event CRUD · `9` show creation (clones `venue_seats` → `show_seats`, all `available`) · `10` per-category show pricing
 - **Verify:** `show_seats` row count == `venue_seats` row count after show creation.
+- Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
 **Checkpoint 4 — Customer: browse & seat map read**
 - `11` event listing/filters · `12` show seatmap read
