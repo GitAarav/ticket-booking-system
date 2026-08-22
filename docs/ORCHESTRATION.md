@@ -61,10 +61,11 @@ Commit message style: `type: short description`, one logical change per commit, 
 - **Verify:** filter events, open a show, returned seatmap matches DB state.
 - Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
-**Checkpoint 5 — Core concurrency: hold & confirm (test-first)**
+**Checkpoint 5 — Core concurrency: hold & confirm (test-first) — ✅ done**
 - `13` concurrency test first (N parallel requests, one seat, assert exactly 1 succeeds — red)
 - `14` `attemptSeatTransition()` + hold endpoint until green · `15` multi-seat hold in one transaction · `16` hold→confirm endpoint
 - **Verify:** `npm test` green; manual 2-seat hold+confirm produces correct `booking_seats` rows.
+- Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
 **Checkpoint 6 — TTL sweep & auto-release**
 - `17` `node-cron` sweep releasing expired holds via `attemptSeatTransition()`

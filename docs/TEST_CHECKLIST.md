@@ -51,6 +51,17 @@ What's been verified, how, and the actual result — not a vibe check. Updated a
 - [x] `GET /customer/shows/:showId` → returns event info + venue info + both category prices, correctly combined
 - [x] `GET /customer/shows/:showId/seatmap` → 40 seats, all `status: "available"`, grouped by row, each seat tagged with its category — reads live `show_seats`, not the static `venue_seats` blueprint
 
+## Checkpoint 5 — Concurrency: hold & confirm (test-first)
+
+This is the one checkpoint with an automated test, run via `npm test` (`server/tests/concurrency.test.js`). Everything else below was checked manually.
+
+- [x] **Red first:** test written and run *before* the hold endpoint existed — failed with 0/5 successes (all requests 404'd), confirming the test fails for the right reason
+- [x] **Green after building `attemptSeatTransition()` + the hold/confirm endpoints:** `npm test` → 5 simultaneous `POST /hold` requests for the *same seat*, exactly 1 returns `201`, the other 4 return `409`
+- [x] Manual 2-seat hold on the Inception show → both seats `held`, `held_until` ~10 minutes out
+- [x] Manual confirm of those 2 held seats → `201`, `total_amount` correctly computed as ₹1000 (2 × Premium ₹500), both seats now `booked`
+- [x] `booking_seats` rows in the database correctly link the booking to both `show_seat` ids
+- [x] **No-partial-holds check:** requested 1 fresh seat + 1 already-booked seat together → `409`, and confirmed via direct SQL that the fresh seat was left `available` (the whole transaction rolled back, not just the failed seat)
+
 ## Not yet reached
 
 Checkpoints 5–12 (concurrency hold/confirm, TTL sweep, waitlist, QR/email, real-time, API contract freeze, deploy) — see `ORCHESTRATION.md` for what each will need to verify.

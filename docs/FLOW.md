@@ -94,6 +94,44 @@ Client (customer token)
 
 This is the first response in the system that includes a live `status` field per seat (`available` / `held` / `booked`). Right now everything reads `available` because nothing writes any other status yet — that starts at Checkpoint 5.
 
+## Customer: holding and booking seats (Checkpoint 5)
+
+```
+Client (customer token)
+  → POST /customer/shows/:showId/hold   { seatIds: [...] }
+       routes/customer.js validates seatIds shape (max 10, non-empty)
+       → seatService.holdSeats()
+            opens ONE db transaction, then for each seatId in order:
+              → attemptSeatTransition(client, { seatId, toStatus: 'held', customerId })
+                   UPDATE show_seats SET status='held', held_until=now()+10min
+                   WHERE id = seatId
+                     AND (status='available' OR (status='held' AND held_until < now()))
+                   -- the WHERE clause IS the concurrency guard: check-and-write
+                   -- happen as one atomic statement, so two simultaneous
+                   -- requests for the same seat can never both succeed
+              → if a seat's UPDATE affects 0 rows (already taken), the WHOLE
+                transaction is rolled back immediately — no partial holds,
+                verified in TEST_CHECKLIST.md
+       → 201 with all held seats, or 409 naming the seat that blocked it
+
+  → POST /customer/shows/:showId/confirm   { seatIds: [...] }
+       → seatService.confirmBooking()
+            same one-transaction pattern, but the guard is different:
+              → attemptSeatTransition(client, { seatId, toStatus: 'booked', customerId })
+                   UPDATE ... WHERE status='held' AND held_by_customer_id=customerId
+                     AND held_until >= now()
+                   -- only the person currently holding it, before it expires,
+                   -- can convert a hold into a real booking
+            once every seat transitions successfully:
+              → INSERT INTO bookings   (total_amount computed from show_pricing)
+              → INSERT INTO booking_seats, one row per seat
+       → 201 with the booking + seats, or 409 if a hold expired/was stolen
+```
+
+`attemptSeatTransition()` (`server/src/services/seatService.js`) is the single function both of these call — and per `CONSTRAINTS.md`, it must stay the only code path that ever writes `show_seats.status`, including the TTL sweep and waitlist logic still to come.
+
+**How this was actually verified, not just written:** an automated test (`server/tests/concurrency.test.js`) fires 5 simultaneous hold requests at the *same* seat from 5 different customers and asserts exactly 1 succeeds. It was run once before this logic existed (failed — "red", 0/5 succeeded since the route 404'd) and again after (passed — "green", 1/5 succeeded, 4/5 got `409`). See `TEST_CHECKLIST.md`.
+
 ## Not yet built
 
-The seat hold → confirm → TTL sweep → waitlist → QR/email flow (Checkpoints 5–9) doesn't exist in code yet. Once it does, this file gets a new section tracing `attemptSeatTransition()` — the single function every seat-status change must go through (see `CONSTRAINTS.md`).
+TTL sweep (auto-release of abandoned holds), waitlist auto-assignment, and QR/email delivery (Checkpoints 6–9) don't exist in code yet.
