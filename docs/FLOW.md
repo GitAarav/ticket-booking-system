@@ -132,6 +132,32 @@ Client (customer token)
 
 **How this was actually verified, not just written:** an automated test (`server/tests/concurrency.test.js`) fires 5 simultaneous hold requests at the *same* seat from 5 different customers and asserts exactly 1 succeeds. It was run once before this logic existed (failed — "red", 0/5 succeeded since the route 404'd) and again after (passed — "green", 1/5 succeeded, 4/5 got `409`). See `TEST_CHECKLIST.md`.
 
+## Background: releasing abandoned holds (Checkpoint 6)
+
+There are two separate mechanisms here, not one — worth keeping distinct when explaining this system.
+
+```
+Mechanism 1 — lazy expiry (already existed since Checkpoint 5, just now demonstrated):
+  attemptSeatTransition(..., toStatus: 'held') 's WHERE clause already reads:
+    status = 'available' OR (status = 'held' AND held_until < now())
+  → an expired-but-not-yet-swept hold is treated as available the instant
+    anyone tries to hold it — no background job involved at all
+
+Mechanism 2 — the proactive sweep (new in Checkpoint 6):
+  server/src/jobs/sweepJob.js, started from index.js (NOT app.js — deliberately
+  kept out of the test-facing app so `npm test` never has a cron job running
+  in the background)
+    → every SWEEP_INTERVAL_SECONDS (10s), runs:
+         SELECT id FROM show_seats WHERE status='held' AND held_until < now()
+    → for each one found, calls the SAME attemptSeatTransition(..., toStatus:
+      'available') used everywhere else — the sweep is not a special case,
+      it goes through the one choke point like hold/confirm do
+```
+
+Why both exist: mechanism 1 guarantees correctness (an expired hold can never block a real customer, even if the sweep is late or briefly down). Mechanism 2 exists purely so the seat map *visibly* updates for everyone browsing, not just for the next person who happens to click that exact seat — without it, a stale seat would look "held" on-screen to onlookers even though it's actually re-holdable underneath.
+
+**Verified as two separate proofs, since they're two separate code paths:** an expired-but-unswept seat was grabbed by a different customer with zero wait (proving mechanism 1 alone); a separate expired seat was left completely untouched for ~12 seconds and confirmed to flip to `available` on its own via direct SQL, no request involved (proving mechanism 2 alone). See `TEST_CHECKLIST.md`.
+
 ## Not yet built
 
-TTL sweep (auto-release of abandoned holds), waitlist auto-assignment, and QR/email delivery (Checkpoints 6–9) don't exist in code yet.
+Waitlist auto-assignment and time-limited offers, and QR/email delivery (Checkpoints 7–9) don't exist in code yet.

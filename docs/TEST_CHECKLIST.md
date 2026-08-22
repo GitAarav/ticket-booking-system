@@ -62,6 +62,13 @@ This is the one checkpoint with an automated test, run via `npm test` (`server/t
 - [x] `booking_seats` rows in the database correctly link the booking to both `show_seat` ids
 - [x] **No-partial-holds check:** requested 1 fresh seat + 1 already-booked seat together → `409`, and confirmed via direct SQL that the fresh seat was left `available` (the whole transaction rolled back, not just the failed seat)
 
+## Checkpoint 6 — TTL sweep & auto-release
+
+Both expiry mechanisms verified separately, since they're genuinely different code paths.
+
+- [x] **Lazy expiry (no sweep involved):** a held seat was forced into an expired state via direct SQL, and a *different* customer's hold request on that exact seat succeeded immediately (`201`) in the same instant — proving the `attemptSeatTransition()` `WHERE` clause treats an expired hold as available on its own, with zero dependency on the background job
+- [x] **Sweep auto-release:** a different seat was forced into the same expired state, confirmed still `status = 'held'` via direct SQL with no request touching it, then — after waiting ~12 seconds with the server running and **no API calls made at all** — confirmed via direct SQL that the seat had flipped to `status = 'available'`, `held_by_customer_id = NULL`, `held_until = NULL` entirely on its own
+
 ## Not yet reached
 
 Checkpoints 5–12 (concurrency hold/confirm, TTL sweep, waitlist, QR/email, real-time, API contract freeze, deploy) — see `ORCHESTRATION.md` for what each will need to verify.

@@ -67,9 +67,10 @@ Commit message style: `type: short description`, one logical change per commit, 
 - **Verify:** `npm test` green; manual 2-seat hold+confirm produces correct `booking_seats` rows.
 - Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
-**Checkpoint 6 — TTL sweep & auto-release**
+**Checkpoint 6 — TTL sweep & auto-release — ✅ done**
 - `17` `node-cron` sweep releasing expired holds via `attemptSeatTransition()`
 - **Verify:** shortened-TTL hold auto-releases with no manual call; lazy expiry also proven (a fresh hold on an expired-but-unswept seat succeeds).
+- Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
 **Checkpoint 7 — Cancellation & waitlist**
 - `18` waitlist join · `19` cancellation endpoint · `20` `offerNextInWaitlist()` wired to cancellation · `21` sweep extended for expired-offer cascade
