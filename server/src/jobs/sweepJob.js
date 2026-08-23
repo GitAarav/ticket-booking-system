@@ -8,12 +8,7 @@ async function sweepExpiredHolds() {
   );
 
   for (const { id } of expired) {
-    const client = await pool.connect();
-    try {
-      await attemptSeatTransition(client, { seatId: id, toStatus: 'available' });
-    } finally {
-      client.release();
-    }
+    await attemptSeatTransition(pool, { seatId: id, toStatus: 'available' });
   }
 
   return expired.length;
