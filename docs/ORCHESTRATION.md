@@ -82,9 +82,11 @@ Commit message style: `type: short description`, one logical change per commit, 
 - **Verify:** valid token books; expired token rejected.
 - Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
-**Checkpoint 9 — QR + email (SendGrid), fault-isolated**
+**Checkpoint 9 — QR + email (SendGrid), fault-isolated — ⚠️ code done, one manual step outstanding**
 - `23` QR generation on confirm · `24` `email_outbox` insert in the same transaction as confirm · `25` SendGrid send via sweep worker
 - **Verify:** real email arrives with scannable QR; then break the SendGrid key and confirm a booking again — **booking must still succeed**.
+- All code built and the fault-isolation half fully verified (see `TEST_CHECKLIST.md`, `DECISIONS.md`) — done with `SENDGRID_API_KEY` genuinely unset, which doubled as "the key is broken" test.
+- **Outstanding:** real email delivery (an actual message in an actual inbox) needs a real SendGrid account — sign up free at sendgrid.com, get an API key, set `SENDGRID_API_KEY` and `EMAIL_FROM` in `server/.env`, then confirm one real booking and check the inbox. This is the one piece only the project owner can do.
 
 **Checkpoint 10 — Real-time seat map**
 - `26` in-process emitter + SSE endpoint (via `seatMapSerializer()`) · `27` Redis pub/sub behind the same interface

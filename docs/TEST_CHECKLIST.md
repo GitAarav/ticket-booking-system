@@ -89,6 +89,17 @@ Verified end to end against a fresh sold-out Premium scenario, using the actual 
 - [x] **Replay protection:** reusing the exact same (already-used) token a second time → `409 "this offer is no longer valid"` — caught by `confirmBooking()`'s own guard (seat is no longer `held`), no extra code needed for this
 - [x] **Expired token rejected:** a token manually signed with a negative expiry (same real secret) → `400 "invalid or expired offer link"`, `jwt.verify()`'s own expiry check firing correctly
 
+## Checkpoint 9 — QR + email (SendGrid), fault-isolated
+
+Run with `SENDGRID_API_KEY` genuinely unset — not a simulated failure, the actual current state of `.env`. That made the fault-isolation test and the "no key configured" case the same test.
+
+- [x] `QRCode.toDataURL()` sanity-checked in isolation → produces a valid `data:image/png;base64,...` string
+- [x] Confirming a real booking with no SendGrid key configured → succeeds immediately (`201`, `status: confirmed`) — email sending never sits on the critical path
+- [x] `email_outbox` row created in the same transaction: correct `booking_id`, `type = 'booking_confirmation'`, `status = 'pending'`
+- [x] **Fault isolation, full retry cycle:** watched the outbox row across 5 sweep ticks — `attempts` climbed 1→5, `last_error` correctly showed `"SENDGRID_API_KEY not configured"` each time, final `status = 'failed'` — and the booking's own `status` was re-checked at that point: still `confirmed`, completely unaffected throughout
+- [x] `waitlist_offer` email type also verified: cancelling a booking with an active waiter queued an outbox row with `type = 'waitlist_offer'`, correctly joined to the waitlist entry, same fault-isolated retry behavior
+- [ ] **Real email delivery (an actual message in an actual inbox) — not yet verified, needs a real SendGrid API key.** Everything up to the actual `sgMail.send()` call is proven working (content builds correctly for both email types, QR generates correctly); only the real send itself needs credentials only the project owner can provide (see `DECISIONS.md`).
+
 ## Not yet reached
 
-Checkpoints 5–12 (concurrency hold/confirm, TTL sweep, waitlist, QR/email, real-time, API contract freeze, deploy) — see `ORCHESTRATION.md` for what each will need to verify.
+Checkpoints 10–12 (real-time seat map, API contract freeze, backend deploy) — see `ORCHESTRATION.md` for what each will need to verify.

@@ -233,6 +233,42 @@ Client clicks the link (no login, no Authorization header)
 
 **Replay protection needed zero new code:** once `confirmBooking` succeeds, the seat is `'booked'`, not `'held'` anymore — so trying the same token again fails inside `confirmBooking`'s own existing guard, the same way any other stale hold attempt does. Verified directly: reused the same real token twice, second attempt got a clean `409`.
 
+## QR + email, fault-isolated (Checkpoint 9)
+
+```
+Two places QUEUE an email — inside their OWN existing transaction, not after it:
+
+  seatService.confirmBooking()          -- Checkpoint 5, extended
+       ... existing booking + booking_seats inserts ...
+       → INSERT INTO email_outbox (booking_id, type='booking_confirmation', status='pending')
+       → COMMIT   -- "booking confirmed" and "email queued" happen together, or not at all
+
+  waitlistService.offerNextInWaitlist() -- Checkpoint 7, extended
+       ... existing waitlist_entries UPDATE ...
+       → INSERT INTO email_outbox (waitlist_entry_id, type='waitlist_offer', status='pending')
+       → (caller COMMITs — cancelBooking or the sweep's cascade)
+
+One place SENDS them, entirely separate, on the sweep's schedule:
+
+  sweepJob.js, every 10s, now runs a THIRD pass after the existing two:
+    emailService.sendPendingEmails()
+       SELECT * FROM email_outbox WHERE status='pending' LIMIT 20
+       for each row:
+         build content (differs by type):
+           'booking_confirmation' → join bookings+users+shows+events,
+                QRCode.toDataURL(booking_reference) generated fresh, embedded inline
+           'waitlist_offer'       → join waitlist_entries+users+shows+events,
+                re-check the entry's CURRENT status is still 'offered' (it may
+                have been confirmed/expired since queuing — send nothing if so),
+                issueOfferToken() regenerated fresh from the live offer_expires_at
+         attempt sgMail.send(...)
+           success → status='sent'
+           failure → attempts += 1; status = 'failed' if attempts >= 5, else
+                      stays 'pending' for the next tick; last_error recorded
+```
+
+**The critical-path/side-effect split this whole checkpoint is about:** confirming a booking or creating an offer NEVER calls SendGrid directly — it only ever writes a `pending` row to a table. Whether that email ever successfully sends is completely decoupled from whether the booking succeeded. Verified directly, not assumed: a real booking was confirmed with no SendGrid key configured at all, succeeded immediately, and its outbox row was watched through all 5 retries to `failed` while the booking's own `status` stayed `confirmed` the entire time. See `TEST_CHECKLIST.md` and `DECISIONS.md`.
+
 ## Not yet built
 
-QR code generation and email delivery (Checkpoint 9) don't exist in code yet.
+Real-time seat map updates (SSE + Redis pub/sub, Checkpoint 10) don't exist in code yet.
