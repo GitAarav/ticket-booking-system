@@ -77,9 +77,10 @@ Commit message style: `type: short description`, one logical change per commit, 
 - **Verify:** 2 waitlisted customers, cancel a booking → oldest offered; let it expire → next customer auto-offered.
 - Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`. One real bug found and fixed mid-verification — see `DECISIONS.md`.
 
-**Checkpoint 8 — Time-limited offer confirm link**
+**Checkpoint 8 — Time-limited offer confirm link — ✅ done**
 - `22` signed offer token + `/offers/:token` (reuses checkpoint-5 hold→confirm path)
 - **Verify:** valid token books; expired token rejected.
+- Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
 **Checkpoint 9 — QR + email (SendGrid), fault-isolated**
 - `23` QR generation on confirm · `24` `email_outbox` insert in the same transaction as confirm · `25` SendGrid send via sweep worker

@@ -80,6 +80,15 @@ Verified end to end against a real sold-out category (Standard, 20/20 booked on 
 - [x] **Bug caught and fixed here:** the first attempt at this test found the seat stuck as `booked` forever after cancellation, with no offer ever created — root cause was `attemptSeatTransition`'s `'available'` transition only accepting seats coming from `'held'`, not `'booked'`. Fixed (`WHERE status IN ('held', 'booked')`), re-verified, confirmed working. See `DECISIONS.md`.
 - [x] **Offer-expiry cascade:** forcing the first customer's offer to expire (both `waitlist_entries.offer_expires_at` and the seat's own `held_until`, which must be forced together — see the two failed attempts logged in this session before getting it right) → after one sweep cycle, the first entry flips to `expired`, and the *second* customer's entry automatically flips to `offered`, on the exact same seat — confirmed via `show_seats` that the seat is now `held` by the second customer with a fresh ~15-minute window
 
+## Checkpoint 8 — Time-limited offer confirm link
+
+Verified end to end against a fresh sold-out Premium scenario, using the actual token logged by the server (a real signed JWT, not a hand-crafted stand-in).
+
+- [x] Two customers join the Premium waitlist in order; the booking gets cancelled; server log confirms the offer (and its token) went to the *first* joiner, matching Checkpoint 7's FIFO guarantee
+- [x] `POST /offers/:token/confirm` with the real, valid, unexpired token — **and no `Authorization` header at all** — → `201`, real booking created, correct `total_amount`, seat flips to `booked`; the waitlist entry itself flips to `status = booked`
+- [x] **Replay protection:** reusing the exact same (already-used) token a second time → `409 "this offer is no longer valid"` — caught by `confirmBooking()`'s own guard (seat is no longer `held`), no extra code needed for this
+- [x] **Expired token rejected:** a token manually signed with a negative expiry (same real secret) → `400 "invalid or expired offer link"`, `jwt.verify()`'s own expiry check firing correctly
+
 ## Not yet reached
 
 Checkpoints 5–12 (concurrency hold/confirm, TTL sweep, waitlist, QR/email, real-time, API contract freeze, deploy) — see `ORCHESTRATION.md` for what each will need to verify.

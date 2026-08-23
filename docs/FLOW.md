@@ -202,6 +202,37 @@ sweepJob.js, every 10s, now runs TWO sweeps in sequence:
 
 **Bug found while verifying this (see `DECISIONS.md`):** `attemptSeatTransition`'s `'available'` transition originally only accepted seats coming from `status='held'` — correct for Checkpoint 6's use case (releasing an expired hold) but wrong for cancellation, where the seat is `'booked'`. Fixed to accept both.
 
+## The signed offer link (Checkpoint 8)
+
+```
+When an offer is created (inside offerNextInWaitlist, cancellation or cascade path):
+  expiresAt = now + 15 minutes (same value used for the DB's offer_expires_at)
+  token = waitlistService.issueOfferToken(waitlistEntryId, expiresAt)
+       jwt.sign({ waitlistEntryId, purpose: 'waitlist_offer' }, JWT_SECRET,
+                 { expiresIn: secondsUntil(expiresAt) })
+  -- logged for now (console.log); this exact string is what Checkpoint 9's
+  -- email body will embed as the clickable link
+
+Client clicks the link (no login, no Authorization header)
+  → POST /offers/:token/confirm         -- routes/offers.js, NOT under
+                                            authenticate/roleGuard('customer')
+       → waitlistService.verifyOfferToken(token)
+            jwt.verify(...) + checks the `purpose` claim specifically,
+            so a normal login JWT (signed with the same secret) can't
+            accidentally be reused here
+       → waitlistService.getWaitlistEntry(decoded.waitlistEntryId)
+            reject if status != 'offered', or if offer_expires_at has passed
+            (checked against the DB, not just trusting the JWT's own exp —
+            SYSTEM_DESIGN.md's explicit instruction)
+       → seatService.confirmBooking(...)     -- THE SAME function Checkpoint 5 built
+            the seat is already held, pre-assigned to this customer, by the
+            offer — so "confirming an offer" and "confirming a normal hold"
+            are mechanically identical, just entered via a different door
+       → waitlistService.markWaitlistEntryBooked(entry.id)
+```
+
+**Replay protection needed zero new code:** once `confirmBooking` succeeds, the seat is `'booked'`, not `'held'` anymore — so trying the same token again fails inside `confirmBooking`'s own existing guard, the same way any other stale hold attempt does. Verified directly: reused the same real token twice, second attempt got a clean `409`.
+
 ## Not yet built
 
-Time-limited offer confirm links and QR/email delivery (Checkpoints 8–9) don't exist in code yet.
+QR code generation and email delivery (Checkpoint 9) don't exist in code yet.
