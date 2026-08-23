@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { pool } = require('../db/pool');
 const { attemptSeatTransition } = require('../services/seatService');
+const { sweepExpiredOffers } = require('../services/waitlistService');
 
 async function sweepExpiredHolds() {
   const { rows: expired } = await pool.query(
@@ -20,9 +21,14 @@ function startSweepJob() {
 
   return cron.schedule(cronExpression, async () => {
     try {
-      const count = await sweepExpiredHolds();
-      if (count > 0) {
-        console.log(`[sweep] released ${count} expired hold(s)`);
+      const releasedCount = await sweepExpiredHolds();
+      if (releasedCount > 0) {
+        console.log(`[sweep] released ${releasedCount} expired hold(s)`);
+      }
+
+      const { expired: expiredOffers, cascaded } = await sweepExpiredOffers();
+      if (expiredOffers > 0) {
+        console.log(`[sweep] expired ${expiredOffers} waitlist offer(s), cascaded ${cascaded} to next in line`);
       }
     } catch (err) {
       console.error('[sweep] error:', err);

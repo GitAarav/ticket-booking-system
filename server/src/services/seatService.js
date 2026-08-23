@@ -2,7 +2,7 @@ const { pool } = require('../db/pool');
 
 const HOLD_TTL_MINUTES = process.env.SEAT_HOLD_TTL_MINUTES || 10;
 
-async function attemptSeatTransition(client, { seatId, toStatus, customerId }) {
+async function attemptSeatTransition(client, { seatId, toStatus, customerId, holdMinutes }) {
   if (toStatus === 'held') {
     const { rows } = await client.query(
       `UPDATE show_seats
@@ -11,7 +11,7 @@ async function attemptSeatTransition(client, { seatId, toStatus, customerId }) {
        WHERE id = $1
          AND (status = 'available' OR (status = 'held' AND held_until < now()))
        RETURNING *`,
-      [seatId, customerId, HOLD_TTL_MINUTES]
+      [seatId, customerId, holdMinutes || HOLD_TTL_MINUTES]
     );
     return rows[0] || null;
   }
@@ -32,7 +32,7 @@ async function attemptSeatTransition(client, { seatId, toStatus, customerId }) {
     const { rows } = await client.query(
       `UPDATE show_seats
        SET status = 'available', held_by_customer_id = NULL, held_until = NULL, updated_at = now()
-       WHERE id = $1 AND status = 'held'
+       WHERE id = $1 AND status IN ('held', 'booked')
        RETURNING *`,
       [seatId]
     );

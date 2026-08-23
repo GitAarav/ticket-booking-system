@@ -3,6 +3,8 @@ const { authenticate, roleGuard } = require('../middleware/roleGuard');
 const { asyncHandler } = require('../middleware/asyncHandler');
 const eventService = require('../services/eventService');
 const seatService = require('../services/seatService');
+const waitlistService = require('../services/waitlistService');
+const bookingService = require('../services/bookingService');
 
 const router = express.Router();
 const MAX_SEATS_PER_REQUEST = 10;
@@ -84,6 +86,58 @@ router.post('/shows/:showId/confirm', asyncHandler(async (req, res) => {
     return res.status(409).json({ error: `seat ${result.conflictSeatId} is not held by you (hold may have expired)` });
   }
   res.status(201).json({ booking: result.booking, seats: result.seats });
+}));
+
+router.post('/shows/:showId/waitlist', asyncHandler(async (req, res) => {
+  const show = await eventService.getShow(req.params.showId);
+  if (!show) return res.status(404).json({ error: 'show not found' });
+
+  const { categoryId } = req.body;
+  if (!categoryId) return res.status(400).json({ error: 'categoryId is required' });
+
+  const soldOut = await waitlistService.isSoldOut(req.params.showId, categoryId);
+  if (!soldOut) {
+    return res.status(400).json({ error: 'seats are still available in this category; no need to join the waitlist' });
+  }
+
+  const alreadyOnList = await waitlistService.hasActiveEntry({
+    showId: req.params.showId,
+    categoryId,
+    customerId: req.user.userId,
+  });
+  if (alreadyOnList) {
+    return res.status(409).json({ error: 'you are already on the waitlist for this category' });
+  }
+
+  const entry = await waitlistService.joinWaitlist({
+    showId: req.params.showId,
+    categoryId,
+    customerId: req.user.userId,
+  });
+  res.status(201).json({ waitlistEntry: entry });
+}));
+
+router.get('/bookings', asyncHandler(async (req, res) => {
+  const bookings = await bookingService.listBookingsForCustomer(req.user.userId);
+  res.json({ bookings });
+}));
+
+router.post('/bookings/:bookingId/cancel', asyncHandler(async (req, res) => {
+  const result = await bookingService.cancelBooking({
+    bookingId: req.params.bookingId,
+    customerId: req.user.userId,
+  });
+
+  if (!result.ok) {
+    const statusByReason = { not_found: 404, forbidden: 403, already_cancelled: 409 };
+    const messageByReason = {
+      not_found: 'booking not found',
+      forbidden: 'not your booking',
+      already_cancelled: 'booking is already cancelled',
+    };
+    return res.status(statusByReason[result.reason]).json({ error: messageByReason[result.reason] });
+  }
+  res.json({ message: 'booking cancelled' });
 }));
 
 module.exports = router;
