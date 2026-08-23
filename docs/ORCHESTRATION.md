@@ -88,9 +88,10 @@ Commit message style: `type: short description`, one logical change per commit, 
 - All code built and the fault-isolation half fully verified (see `TEST_CHECKLIST.md`, `DECISIONS.md`) — done with `SENDGRID_API_KEY` genuinely unset, which doubled as "the key is broken" test.
 - **Outstanding:** real email delivery (an actual message in an actual inbox) needs a real SendGrid account — sign up free at sendgrid.com, get an API key, set `SENDGRID_API_KEY` and `EMAIL_FROM` in `server/.env`, then confirm one real booking and check the inbox. This is the one piece only the project owner can do.
 
-**Checkpoint 10 — Real-time seat map**
+**Checkpoint 10 — Real-time seat map — ⚠️ core mechanism done, Redis path unverified**
 - `26` in-process emitter + SSE endpoint (via `seatMapSerializer()`) · `27` Redis pub/sub behind the same interface
 - **Verify:** two SSE clients on one show; a hold in one arrives on the other within ~1s.
+- In-process path fully verified with two real simultaneous `curl -N` SSE clients (see `TEST_CHECKLIST.md`). Redis-backed path implemented behind the same interface but needs a live Redis instance to actually test — deferred to Checkpoint 12 (deploy, when Upstash gets provisioned). Also flagged: browser `EventSource` can't set auth headers — a Phase C frontend-integration decision, not fixed now. See `DECISIONS.md`.
 
 **Checkpoint 11 — API contract freeze**
 - `28` OpenAPI/Postman doc generated from the real endpoints

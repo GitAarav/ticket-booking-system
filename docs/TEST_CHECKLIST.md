@@ -100,6 +100,17 @@ Run with `SENDGRID_API_KEY` genuinely unset — not a simulated failure, the act
 - [x] `waitlist_offer` email type also verified: cancelling a booking with an active waiter queued an outbox row with `type = 'waitlist_offer'`, correctly joined to the waitlist entry, same fault-isolated retry behavior
 - [ ] **Real email delivery (an actual message in an actual inbox) — not yet verified, needs a real SendGrid API key.** Everything up to the actual `sgMail.send()` call is proven working (content builds correctly for both email types, QR generates correctly); only the real send itself needs credentials only the project owner can provide (see `DECISIONS.md`).
 
+## Checkpoint 10 — Real-time seat map
+
+Verified with two genuinely simultaneous, independent SSE connections (`curl -N`), not a simulated single client.
+
+- [x] Two SSE clients connect to the same show's `/seatmap/stream` → both immediately receive the current seatmap as their first message
+- [x] A hold placed via a completely separate, normal HTTP request → **both** SSE clients receive a second message within ~1 second, both showing the held seat's `status` flip from `available` to `held` — confirmed by parsing the actual received payloads, not just checking a message arrived
+- [x] Initial debugging note kept honest: the first test run looked like it failed (only 1 message read per client) — turned out to be a premature file read racing the still-flushing curl output, not a real bug. Confirmed by re-running with proper wait time and directly inspecting listener counts at publish time before removing the debug logging.
+- [x] Publish/notify only fires after a transaction's `COMMIT`, not from inside `attemptSeatTransition()` — checked by code review of every call site (`holdSeats`, `confirmBooking`, `cancelBooking`, both sweep passes), not just the happy-path test above
+- [ ] **Redis pub/sub path — not verified, no live Redis instance available.** The in-process `EventEmitter` path (what actually runs locally, since `REDIS_URL` is unset) is fully proven above; the Redis-backed path is implemented behind the identical interface but untested. See `DECISIONS.md`.
+- [ ] **Browser `EventSource` + auth header — known gap, not yet solved.** Verified via `curl` (which can set headers); native browser `EventSource` cannot, so this needs a decision at frontend-integration time. See `DECISIONS.md`.
+
 ## Not yet reached
 
-Checkpoints 10–12 (real-time seat map, API contract freeze, backend deploy) — see `ORCHESTRATION.md` for what each will need to verify.
+Checkpoints 11–12 (API contract freeze, backend deploy) — see `ORCHESTRATION.md` for what each will need to verify.

@@ -269,6 +269,49 @@ One place SENDS them, entirely separate, on the sweep's schedule:
 
 **The critical-path/side-effect split this whole checkpoint is about:** confirming a booking or creating an offer NEVER calls SendGrid directly — it only ever writes a `pending` row to a table. Whether that email ever successfully sends is completely decoupled from whether the booking succeeded. Verified directly, not assumed: a real booking was confirmed with no SendGrid key configured at all, succeeded immediately, and its outbox row was watched through all 5 retries to `failed` while the booking's own `status` stayed `confirmed` the entire time. See `TEST_CHECKLIST.md` and `DECISIONS.md`.
 
+## Real-time seat map (Checkpoint 10)
+
+```
+The publishing side — every place that commits a seat-status change now
+also notifies, right after COMMIT (never before, never from inside
+attemptSeatTransition() — see DECISIONS.md for why):
+
+  seatService.holdSeats()        → after COMMIT → notifySeatmapChanged(showId)
+  seatService.confirmBooking()   → after COMMIT → notifySeatmapChanged(showId)
+  bookingService.cancelBooking() → after COMMIT → notifySeatmapChanged(booking.show_id)
+  sweepJob.sweepExpiredHolds()   → after each release → notifySeatmapChanged(show_id)
+  waitlistService.sweepExpiredOffers() → after each COMMIT → notifySeatmapChanged(offer.show_id)
+
+realtimeService.notifySeatmapChanged(showId)
+  → pubsub.publish(`show:${showId}:seats`, { changedAt: ... })
+       if REDIS_URL set: forwards to Redis only (see DECISIONS.md — local
+         delivery happens exclusively via this app's own pSubscribe
+         callback, never directly, to avoid double-delivery)
+       else: emits directly on the local EventEmitter (what actually
+         runs today, REDIS_URL is unset in dev)
+
+The subscribing side — one SSE connection per browser tab, in principle:
+
+  Client
+    → GET /customer/shows/:showId/seatmap/stream   (routes/customer.js)
+         writeHead 200, Content-Type: text/event-stream
+         pushSeatmap() immediately — current state, before any change
+         realtimeService.onSeatmapChanged(showId, pushSeatmap)
+              subscribes to the SAME channel string every publisher uses
+         req.on('close', unsubscribe)   -- cleans up when the tab closes
+                                            or the connection drops
+
+  Every time ANY of the publishing functions above fires:
+    → pushSeatmap() re-runs eventService.getShowSeatmap(showId) fresh
+      and writes it as a new SSE `data:` event
+    → this is the SAME function that serves the REST GET /seatmap route —
+      one seatMapSerializer(), both paths, can never drift apart
+```
+
+**Verified with two real, independent, simultaneous SSE connections** (`curl -N`, not simulated) — both received the current seatmap immediately on connect, then both received a second push within ~1 second of a hold placed via an entirely separate request, both showing the correct `available → held` transition. See `TEST_CHECKLIST.md`.
+
+**Two things intentionally left unverified, both flagged explicitly rather than silently assumed working:** the Redis-backed path (no live Redis instance available locally — only the in-process `EventEmitter` path, what actually runs today, is proven); and browser `EventSource`'s inability to set the `Authorization` header, which Phase C's frontend integration will need to solve. See `DECISIONS.md` for both.
+
 ## Not yet built
 
-Real-time seat map updates (SSE + Redis pub/sub, Checkpoint 10) don't exist in code yet.
+The API contract freeze and backend deploy (Checkpoints 11–12) haven't happened yet.
