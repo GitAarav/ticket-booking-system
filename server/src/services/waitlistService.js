@@ -98,6 +98,11 @@ async function offerNextInWaitlist(client, { showId, categoryId, seatId }) {
     [entry.id, expiresAt, seatId]
   );
 
+  await client.query(
+    `INSERT INTO email_outbox (waitlist_entry_id, type, status) VALUES ($1, 'waitlist_offer', 'pending')`,
+    [entry.id]
+  );
+
   const token = issueOfferToken(entry.id, expiresAt);
   console.log(`[waitlist] offered seat ${seatId} to customer ${entry.customer_id}, confirm token: ${token}`);
 

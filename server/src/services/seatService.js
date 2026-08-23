@@ -105,6 +105,11 @@ async function confirmBooking({ showId, seatIds, customerId }) {
       );
     }
 
+    await client.query(
+      `INSERT INTO email_outbox (booking_id, type, status) VALUES ($1, 'booking_confirmation', 'pending')`,
+      [booking.id]
+    );
+
     await client.query('COMMIT');
     return { ok: true, booking, seats: booked };
   } catch (err) {
