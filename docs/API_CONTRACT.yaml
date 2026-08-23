@@ -1,0 +1,638 @@
+openapi: 3.0.3
+info:
+  title: Ticket Booking System API
+  version: "1.0.0"
+  description: >
+    Frozen API contract for the ticket booking backend, generated from the real
+    implemented endpoints (Checkpoints 0-10). This document, not the server
+    source code, is what the frontend (built separately) is built against —
+    see docs/ORCHESTRATION.md's "Tool handoff" section. Data model and
+    concurrency/TTL/waitlist design reasoning live in docs/SYSTEM_DESIGN.md.
+
+servers:
+  - url: http://localhost:4000
+    description: Local development
+  - url: https://TBD.onrender.com
+    description: Production (filled in at Checkpoint 12 deploy)
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Obtained from POST /auth/register or POST /auth/login. Sent as
+        "Authorization: Bearer <token>". POST /offers/:token/confirm is the
+        one exception — it needs no Authorization header at all, since the
+        token in the URL itself is the credential.
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      example:
+        error: "human-readable error message"
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [customer, organiser, admin] }
+        created_at: { type: string, format: date-time }
+
+    AuthResponse:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        token: { type: string, description: "JWT, expires per JWT_EXPIRES_IN (default 7d)" }
+
+    Venue:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        admin_id: { type: string, format: uuid }
+        name: { type: string }
+        address: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    Category:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        venue_id: { type: string, format: uuid }
+        name: { type: string }
+
+    VenueSeat:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        venue_id: { type: string, format: uuid }
+        category_id: { type: string, format: uuid }
+        row_label: { type: string }
+        seat_number: { type: integer }
+        pos_x: { type: integer }
+        pos_y: { type: integer }
+
+    AdminSeatmapSeat:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        seatNumber: { type: integer }
+        posX: { type: integer }
+        posY: { type: integer }
+        category:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+
+    AdminSeatmapRow:
+      type: object
+      properties:
+        rowLabel: { type: string }
+        seats:
+          type: array
+          items: { $ref: '#/components/schemas/AdminSeatmapSeat' }
+
+    LiveSeatmapSeat:
+      allOf:
+        - $ref: '#/components/schemas/AdminSeatmapSeat'
+        - type: object
+          properties:
+            status: { type: string, enum: [available, held, booked] }
+
+    LiveSeatmapRow:
+      type: object
+      properties:
+        rowLabel: { type: string }
+        seats:
+          type: array
+          items: { $ref: '#/components/schemas/LiveSeatmapSeat' }
+
+    Event:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organiser_id: { type: string, format: uuid }
+        title: { type: string }
+        type: { type: string, enum: [movie, concert] }
+        description: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    Show:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        event_id: { type: string, format: uuid }
+        venue_id: { type: string, format: uuid }
+        show_date: { type: string, format: date }
+        show_time: { type: string, example: "19:00:00" }
+        created_at: { type: string, format: date-time }
+
+    ShowWithVenue:
+      allOf:
+        - $ref: '#/components/schemas/Show'
+        - type: object
+          properties:
+            venue_name: { type: string }
+            venue_address: { type: string, nullable: true }
+
+    PricingEntry:
+      type: object
+      properties:
+        category_id: { type: string, format: uuid }
+        category_name: { type: string }
+        price: { type: string, example: "500.00" }
+
+    ShowDetail:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        show_date: { type: string, format: date }
+        show_time: { type: string }
+        title: { type: string }
+        type: { type: string, enum: [movie, concert] }
+        description: { type: string, nullable: true }
+        venue_id: { type: string, format: uuid }
+        venue_name: { type: string }
+        venue_address: { type: string, nullable: true }
+        pricing:
+          type: array
+          items: { $ref: '#/components/schemas/PricingEntry' }
+
+    ShowSeat:
+      type: object
+      description: A single seat's live state, returned by hold/confirm.
+      properties:
+        id: { type: string, format: uuid }
+        show_id: { type: string, format: uuid }
+        venue_seat_id: { type: string, format: uuid }
+        category_id: { type: string, format: uuid }
+        status: { type: string, enum: [available, held, booked] }
+        held_by_customer_id: { type: string, format: uuid, nullable: true }
+        held_until: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time }
+
+    Booking:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        booking_reference: { type: string, example: "BK-MT4CXZBL-4Y38" }
+        customer_id: { type: string, format: uuid }
+        show_id: { type: string, format: uuid }
+        total_amount: { type: string, example: "1000.00" }
+        status: { type: string, enum: [confirmed, cancelled] }
+        created_at: { type: string, format: date-time }
+
+    BookingWithShow:
+      allOf:
+        - $ref: '#/components/schemas/Booking'
+        - type: object
+          properties:
+            title: { type: string }
+            type: { type: string, enum: [movie, concert] }
+            show_date: { type: string, format: date }
+            show_time: { type: string }
+
+    WaitlistEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        show_id: { type: string, format: uuid }
+        category_id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+        status: { type: string, enum: [waiting, offered, expired, booked] }
+        created_at: { type: string, format: date-time }
+        offer_expires_at: { type: string, format: date-time, nullable: true }
+        offered_seat_id: { type: string, format: uuid, nullable: true }
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness check (also confirms DB connectivity)
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, example: "ok" } }
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register as a customer or organiser (admin accounts cannot self-register — see npm run seed:admin)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                role: { type: string, enum: [customer, organiser] }
+            example:
+              name: "Jane Doe"
+              email: "jane@example.com"
+              password: "pass1234"
+              role: "customer"
+      responses:
+        '201':
+          description: Registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { description: "Validation failed (bad email, short password, or role not self-registerable)", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '409': { description: "Email already registered", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+            example: { email: "jane@example.com", password: "pass1234" }
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '401': { description: "Invalid credentials", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Return the decoded token payload for the current caller (any role)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      userId: { type: string, format: uuid }
+                      role: { type: string }
+        '401': { description: "Missing/invalid/expired token", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /admin/venues:
+    post:
+      tags: [Admin]
+      summary: Create a venue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties: { name: { type: string }, address: { type: string } }
+            example: { name: "Cinema Hall 3", address: "MG Road" }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { venue: { $ref: '#/components/schemas/Venue' } } } } } }
+        '400': { description: "Missing name", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '403': { description: "Not an admin", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    get:
+      tags: [Admin]
+      summary: List venues owned by the calling admin
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { venues: { type: array, items: { $ref: '#/components/schemas/Venue' } } } } } } }
+
+  /admin/venues/{venueId}:
+    parameters:
+      - { name: venueId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Admin]
+      summary: Get one venue (must be owned by caller)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { venue: { $ref: '#/components/schemas/Venue' } } } } } }
+        '403': { description: "Not your venue" }
+        '404': { description: "Venue not found" }
+    patch:
+      tags: [Admin]
+      summary: Partially update a venue (only fields provided are changed)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { name: { type: string }, address: { type: string } }
+            example: { address: "New MG Road" }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { venue: { $ref: '#/components/schemas/Venue' } } } } } }
+    delete:
+      tags: [Admin]
+      summary: Delete a venue (rejected if it has scheduled shows)
+      responses:
+        '204': { description: Deleted }
+        '409': { description: "Venue has N show(s) scheduled", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /admin/venues/{venueId}/categories:
+    parameters:
+      - { name: venueId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Admin]
+      summary: Add a seat category to a venue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string } } }
+            example: { name: "Premium" }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { category: { $ref: '#/components/schemas/Category' } } } } } }
+    get:
+      tags: [Admin]
+      summary: List a venue's categories
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { categories: { type: array, items: { $ref: '#/components/schemas/Category' } } } } } } }
+
+  /admin/venues/{venueId}/seats/bulk:
+    parameters:
+      - { name: venueId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Admin]
+      summary: Bulk-create seats (max 500 per request; every categoryId must belong to this venue)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [seats]
+              properties:
+                seats:
+                  type: array
+                  items:
+                    type: object
+                    required: [categoryId, rowLabel, seatNumber]
+                    properties:
+                      categoryId: { type: string, format: uuid }
+                      rowLabel: { type: string }
+                      seatNumber: { type: integer }
+                      posX: { type: integer }
+                      posY: { type: integer }
+            example:
+              seats:
+                - { categoryId: "c992b522-dac2-4c27-8a7c-3565fc7d1998", rowLabel: "A", seatNumber: 1, posX: 1, posY: 0 }
+                - { categoryId: "c992b522-dac2-4c27-8a7c-3565fc7d1998", rowLabel: "A", seatNumber: 2, posX: 2, posY: 0 }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { seats: { type: array, items: { $ref: '#/components/schemas/VenueSeat' } } } } } } }
+        '400': { description: "Bad shape, >500 seats, or categoryId not in this venue", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /admin/venues/{venueId}/seatmap:
+    parameters:
+      - { name: venueId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Admin]
+      summary: Static seat layout, grouped by row (no live status — that's the customer live seatmap)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { seatmap: { type: array, items: { $ref: '#/components/schemas/AdminSeatmapRow' } } } } } } }
+
+  /organiser/events:
+    post:
+      tags: [Organiser]
+      summary: Create an event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, type]
+              properties: { title: { type: string }, type: { type: string, enum: [movie, concert] }, description: { type: string } }
+            example: { title: "Inception", type: "movie", description: "A mind-bending heist thriller" }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { event: { $ref: '#/components/schemas/Event' } } } } } }
+    get:
+      tags: [Organiser]
+      summary: List events owned by the calling organiser
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { events: { type: array, items: { $ref: '#/components/schemas/Event' } } } } } } }
+
+  /organiser/events/{eventId}:
+    parameters:
+      - { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Organiser]
+      summary: Get one event (must be owned by caller)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { event: { $ref: '#/components/schemas/Event' } } } } } }
+
+  /organiser/events/{eventId}/shows:
+    parameters:
+      - { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Organiser]
+      summary: Schedule a show — clones the venue's seats into live show_seats and sets per-category pricing (every category must be priced)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [venueId, showDate, showTime, pricing]
+              properties:
+                venueId: { type: string, format: uuid }
+                showDate: { type: string, format: date }
+                showTime: { type: string, example: "19:00" }
+                pricing:
+                  type: array
+                  items:
+                    type: object
+                    properties: { categoryId: { type: string, format: uuid }, price: { type: number } }
+            example:
+              venueId: "fbed998a-496c-465c-84f0-442e9afbc5a2"
+              showDate: "2026-09-05"
+              showTime: "19:00"
+              pricing:
+                - { categoryId: "c992b522-dac2-4c27-8a7c-3565fc7d1998", price: 500 }
+                - { categoryId: "37562030-299e-4d1a-ad52-c59dfcadcd0d", price: 300 }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { show: { $ref: '#/components/schemas/Show' } } } } } }
+        '400': { description: "Missing/invalid pricing, or category doesn't belong to the venue", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+    get:
+      tags: [Organiser]
+      summary: List an event's shows
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { shows: { type: array, items: { $ref: '#/components/schemas/Show' } } } } } } }
+
+  /customer/events:
+    get:
+      tags: [Customer]
+      summary: Browse events (only events with at least one show), with optional filters
+      parameters:
+        - { name: type, in: query, schema: { type: string, enum: [movie, concert] } }
+        - { name: search, in: query, schema: { type: string }, description: "Case-insensitive partial match on title" }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { events: { type: array, items: { $ref: '#/components/schemas/Event' } } } } } } }
+
+  /customer/events/{eventId}/shows:
+    parameters:
+      - { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Customer]
+      summary: List an event's showtimes, with venue name/address joined in
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { shows: { type: array, items: { $ref: '#/components/schemas/ShowWithVenue' } } } } } } }
+
+  /customer/shows/{showId}:
+    parameters:
+      - { name: showId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Customer]
+      summary: Full show detail — event + venue + per-category pricing combined
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { show: { $ref: '#/components/schemas/ShowDetail' } } } } } }
+
+  /customer/shows/{showId}/seatmap:
+    parameters:
+      - { name: showId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Customer]
+      summary: Live seat grid for this show — the ONE source of seat status truth (reads show_seats, not the venue's static blueprint)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { seatmap: { type: array, items: { $ref: '#/components/schemas/LiveSeatmapRow' } } } } } } }
+
+  /customer/shows/{showId}/seatmap/stream:
+    parameters:
+      - { name: showId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Customer]
+      summary: Server-Sent Events stream — pushes the full live seatmap on connect and again on every change
+      description: >
+        Content-Type: text/event-stream. Each event is `data: {"seatmap": [...]}\n\n`,
+        same shape as GET .../seatmap. NOTE: native browser EventSource cannot set
+        the Authorization header — this is a known open item for frontend
+        integration (see docs/DECISIONS.md, Checkpoint 10). Verified working via
+        curl -N with a header during backend development.
+      responses:
+        '200':
+          description: text/event-stream connection, stays open
+          content:
+            text/event-stream:
+              schema: { type: string }
+
+  /customer/shows/{showId}/hold:
+    parameters:
+      - { name: showId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Customer]
+      summary: Hold up to 10 seats (all-or-nothing — if any seat is unavailable, none are held)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [seatIds], properties: { seatIds: { type: array, items: { type: string, format: uuid }, maxItems: 10 } } }
+            example: { seatIds: ["ae8d2104-7d9b-4dc6-b301-743fe5c8562b", "27b120a4-bc4f-4cf5-ac8e-e1d4029eb416"] }
+      responses:
+        '201': { description: "All seats held", content: { application/json: { schema: { type: object, properties: { seats: { type: array, items: { $ref: '#/components/schemas/ShowSeat' } } } } } } }
+        '409': { description: "A seat in the request is no longer available — whole request rejected", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /customer/shows/{showId}/confirm:
+    parameters:
+      - { name: showId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Customer]
+      summary: Confirm a booking for seats currently held by the caller
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [seatIds], properties: { seatIds: { type: array, items: { type: string, format: uuid } } } }
+            example: { seatIds: ["ae8d2104-7d9b-4dc6-b301-743fe5c8562b", "27b120a4-bc4f-4cf5-ac8e-e1d4029eb416"] }
+      responses:
+        '201':
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking: { $ref: '#/components/schemas/Booking' }
+                  seats: { type: array, items: { $ref: '#/components/schemas/ShowSeat' } }
+        '409': { description: "A seat is not held by you (hold may have expired)", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /customer/shows/{showId}/waitlist:
+    parameters:
+      - { name: showId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Customer]
+      summary: Join the waitlist for a sold-out category
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [categoryId], properties: { categoryId: { type: string, format: uuid } } }
+            example: { categoryId: "37562030-299e-4d1a-ad52-c59dfcadcd0d" }
+      responses:
+        '201': { description: Joined, content: { application/json: { schema: { type: object, properties: { waitlistEntry: { $ref: '#/components/schemas/WaitlistEntry' } } } } } }
+        '400': { description: "Seats are still available in this category", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '409': { description: "Already on the waitlist for this category", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /customer/bookings:
+    get:
+      tags: [Customer]
+      summary: Booking history for the calling customer
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { bookings: { type: array, items: { $ref: '#/components/schemas/BookingWithShow' } } } } } } }
+
+  /customer/bookings/{bookingId}/cancel:
+    parameters:
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Customer]
+      summary: Cancel a confirmed booking — frees its seats and offers them to the oldest waitlisted customer per category, if any
+      responses:
+        '200': { description: Cancelled, content: { application/json: { schema: { type: object, properties: { message: { type: string, example: "booking cancelled" } } } } } }
+        '403': { description: "Not your booking", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '404': { description: "Booking not found", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '409': { description: "Already cancelled", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+  /offers/{token}/confirm:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string }, description: "Signed JWT from the waitlist-offer email link. No Authorization header needed — the token itself is the credential." }
+    post:
+      tags: [Offers]
+      summary: Complete a booking via a time-limited waitlist offer link (reuses the same confirm path as a normal hold→confirm)
+      security: []
+      responses:
+        '201':
+          description: Booking confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  booking: { $ref: '#/components/schemas/Booking' }
+                  seats: { type: array, items: { $ref: '#/components/schemas/ShowSeat' } }
+        '400': { description: "Invalid or expired token", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '409': { description: "Offer no longer valid, expired, or seat no longer held (e.g. already used — replay protection)", content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
