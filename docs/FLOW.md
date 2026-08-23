@@ -158,6 +158,50 @@ Why both exist: mechanism 1 guarantees correctness (an expired hold can never bl
 
 **Verified as two separate proofs, since they're two separate code paths:** an expired-but-unswept seat was grabbed by a different customer with zero wait (proving mechanism 1 alone); a separate expired seat was left completely untouched for ~12 seconds and confirmed to flip to `available` on its own via direct SQL, no request involved (proving mechanism 2 alone). See `TEST_CHECKLIST.md`.
 
+## Cancellation and waitlist auto-assignment (Checkpoint 7)
+
+```
+Client (customer token)
+  → POST /customer/shows/:showId/waitlist   { categoryId }
+       → waitlistService.isSoldOut()      -- rejects if seats are still available
+       → waitlistService.hasActiveEntry() -- rejects a duplicate join
+       → waitlistService.joinWaitlist()   -- INSERT, status='waiting'
+
+  → POST /customer/bookings/:bookingId/cancel
+       → bookingService.cancelBooking()
+            opens ONE transaction:
+              SELECT * FROM bookings ... FOR UPDATE   -- locks the booking row
+              (ownership + already-cancelled checks)
+              UPDATE bookings SET status='cancelled'
+              for each seat in the booking:
+                → attemptSeatTransition(client, { toStatus: 'available' })
+                → waitlistService.offerNextInWaitlist(client, { showId, categoryId, seatId })
+                     SELECT ... WHERE status='waiting' ORDER BY created_at LIMIT 1
+                       FOR UPDATE SKIP LOCKED   -- see DECISIONS.md for why
+                     if someone's waiting:
+                       → attemptSeatTransition(client, { toStatus: 'held', holdMinutes: 15 })
+                       → UPDATE waitlist_entries SET status='offered',
+                            offer_expires_at, offered_seat_id
+                     if nobody's waiting: seat just stays 'available', no-op
+```
+
+**The expiry cascade — this is the sweep job (Checkpoint 6) extended, not a new mechanism:**
+```
+sweepJob.js, every 10s, now runs TWO sweeps in sequence:
+  1. sweepExpiredHolds()          -- unchanged from Checkpoint 6
+  2. waitlistService.sweepExpiredOffers()
+       SELECT * FROM waitlist_entries WHERE status='offered' AND offer_expires_at < now()
+       for each stale offer, in its own transaction:
+         UPDATE waitlist_entries SET status='expired'
+         → offerNextInWaitlist(client, { showId, categoryId, seatId: offer.offered_seat_id })
+              -- the SAME function cancellation calls; re-offers the SAME seat
+              -- to whoever's now oldest in line, or no-ops if nobody's left
+```
+
+`offerNextInWaitlist()` is the one place this decision gets made, called identically by both cancellation and the expiry cascade — exactly the "one function per invariant" principle from `ORCHESTRATION.md`.
+
+**Bug found while verifying this (see `DECISIONS.md`):** `attemptSeatTransition`'s `'available'` transition originally only accepted seats coming from `status='held'` — correct for Checkpoint 6's use case (releasing an expired hold) but wrong for cancellation, where the seat is `'booked'`. Fixed to accept both.
+
 ## Not yet built
 
-Waitlist auto-assignment and time-limited offers, and QR/email delivery (Checkpoints 7–9) don't exist in code yet.
+Time-limited offer confirm links and QR/email delivery (Checkpoints 8–9) don't exist in code yet.

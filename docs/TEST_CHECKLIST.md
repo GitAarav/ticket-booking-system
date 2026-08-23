@@ -69,6 +69,17 @@ Both expiry mechanisms verified separately, since they're genuinely different co
 - [x] **Lazy expiry (no sweep involved):** a held seat was forced into an expired state via direct SQL, and a *different* customer's hold request on that exact seat succeeded immediately (`201`) in the same instant — proving the `attemptSeatTransition()` `WHERE` clause treats an expired hold as available on its own, with zero dependency on the background job
 - [x] **Sweep auto-release:** a different seat was forced into the same expired state, confirmed still `status = 'held'` via direct SQL with no request touching it, then — after waiting ~12 seconds with the server running and **no API calls made at all** — confirmed via direct SQL that the seat had flipped to `status = 'available'`, `held_by_customer_id = NULL`, `held_until = NULL` entirely on its own
 
+## Checkpoint 7 — Cancellation & waitlist
+
+Verified end to end against a real sold-out category (Standard, 20/20 booked on the Inception show), with real accounts, not synthetic unit tests.
+
+- [x] Joining the waitlist while seats are still available → `400`, rejected
+- [x] Two different customers join the waitlist for the same sold-out category, in order → both `201`
+- [x] Cancelling a confirmed booking on that category → `{"message":"booking cancelled"}`, booking's `status` flips to `cancelled` in the database
+- [x] **Oldest-first offer:** after cancellation, the *first* customer to join (not the second) has their waitlist entry flip to `status = offered`, with `offered_seat_id` set to the freed seat and `offer_expires_at` ~15 minutes out — the second customer's entry stays `waiting`
+- [x] **Bug caught and fixed here:** the first attempt at this test found the seat stuck as `booked` forever after cancellation, with no offer ever created — root cause was `attemptSeatTransition`'s `'available'` transition only accepting seats coming from `'held'`, not `'booked'`. Fixed (`WHERE status IN ('held', 'booked')`), re-verified, confirmed working. See `DECISIONS.md`.
+- [x] **Offer-expiry cascade:** forcing the first customer's offer to expire (both `waitlist_entries.offer_expires_at` and the seat's own `held_until`, which must be forced together — see the two failed attempts logged in this session before getting it right) → after one sweep cycle, the first entry flips to `expired`, and the *second* customer's entry automatically flips to `offered`, on the exact same seat — confirmed via `show_seats` that the seat is now `held` by the second customer with a fresh ~15-minute window
+
 ## Not yet reached
 
 Checkpoints 5–12 (concurrency hold/confirm, TTL sweep, waitlist, QR/email, real-time, API contract freeze, deploy) — see `ORCHESTRATION.md` for what each will need to verify.

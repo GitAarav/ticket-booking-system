@@ -72,9 +72,10 @@ Commit message style: `type: short description`, one logical change per commit, 
 - **Verify:** shortened-TTL hold auto-releases with no manual call; lazy expiry also proven (a fresh hold on an expired-but-unswept seat succeeds).
 - Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
-**Checkpoint 7 — Cancellation & waitlist**
+**Checkpoint 7 — Cancellation & waitlist — ✅ done**
 - `18` waitlist join · `19` cancellation endpoint · `20` `offerNextInWaitlist()` wired to cancellation · `21` sweep extended for expired-offer cascade
 - **Verify:** 2 waitlisted customers, cancel a booking → oldest offered; let it expire → next customer auto-offered.
+- Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`. One real bug found and fixed mid-verification — see `DECISIONS.md`.
 
 **Checkpoint 8 — Time-limited offer confirm link**
 - `22` signed offer token + `/offers/:token` (reuses checkpoint-5 hold→confirm path)
