@@ -1,6 +1,7 @@
 const { pool } = require('../db/pool');
 const { attemptSeatTransition } = require('./seatService');
 const { offerNextInWaitlist } = require('./waitlistService');
+const { notifySeatmapChanged } = require('./realtimeService');
 
 async function listBookingsForCustomer(customerId) {
   const { rows } = await pool.query(
@@ -59,6 +60,7 @@ async function cancelBooking({ bookingId, customerId }) {
     }
 
     await client.query('COMMIT');
+    await notifySeatmapChanged(booking.show_id);
     return { ok: true };
   } catch (err) {
     await client.query('ROLLBACK');

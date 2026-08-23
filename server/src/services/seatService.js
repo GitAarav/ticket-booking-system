@@ -1,4 +1,5 @@
 const { pool } = require('../db/pool');
+const { notifySeatmapChanged } = require('./realtimeService');
 
 const HOLD_TTL_MINUTES = process.env.SEAT_HOLD_TTL_MINUTES || 10;
 
@@ -58,6 +59,7 @@ async function holdSeats({ showId, seatIds, customerId }) {
     }
 
     await client.query('COMMIT');
+    await notifySeatmapChanged(showId);
     return { ok: true, seats: held };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -111,6 +113,7 @@ async function confirmBooking({ showId, seatIds, customerId }) {
     );
 
     await client.query('COMMIT');
+    await notifySeatmapChanged(showId);
     return { ok: true, booking, seats: booked };
   } catch (err) {
     await client.query('ROLLBACK');

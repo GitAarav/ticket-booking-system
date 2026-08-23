@@ -3,14 +3,16 @@ const { pool } = require('../db/pool');
 const { attemptSeatTransition } = require('../services/seatService');
 const { sweepExpiredOffers } = require('../services/waitlistService');
 const { sendPendingEmails } = require('../services/emailService');
+const { notifySeatmapChanged } = require('../services/realtimeService');
 
 async function sweepExpiredHolds() {
   const { rows: expired } = await pool.query(
-    `SELECT id FROM show_seats WHERE status = 'held' AND held_until < now()`
+    `SELECT id, show_id FROM show_seats WHERE status = 'held' AND held_until < now()`
   );
 
-  for (const { id } of expired) {
-    await attemptSeatTransition(pool, { seatId: id, toStatus: 'available' });
+  for (const { id, show_id } of expired) {
+    const released = await attemptSeatTransition(pool, { seatId: id, toStatus: 'available' });
+    if (released) await notifySeatmapChanged(show_id);
   }
 
   return expired.length;

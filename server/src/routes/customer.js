@@ -5,6 +5,7 @@ const eventService = require('../services/eventService');
 const seatService = require('../services/seatService');
 const waitlistService = require('../services/waitlistService');
 const bookingService = require('../services/bookingService');
+const realtimeService = require('../services/realtimeService');
 
 const router = express.Router();
 const MAX_SEATS_PER_REQUEST = 10;
@@ -48,6 +49,30 @@ router.get('/shows/:showId/seatmap', asyncHandler(async (req, res) => {
   if (!show) return res.status(404).json({ error: 'show not found' });
   const seatmap = await eventService.getShowSeatmap(req.params.showId);
   res.json({ seatmap });
+}));
+
+router.get('/shows/:showId/seatmap/stream', asyncHandler(async (req, res) => {
+  const show = await eventService.getShow(req.params.showId);
+  if (!show) return res.status(404).json({ error: 'show not found' });
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+
+  const pushSeatmap = async () => {
+    const seatmap = await eventService.getShowSeatmap(req.params.showId);
+    res.write(`data: ${JSON.stringify({ seatmap })}\n\n`);
+  };
+
+  await pushSeatmap(); // current state immediately on connect, before any change happens
+
+  const unsubscribe = realtimeService.onSeatmapChanged(req.params.showId, pushSeatmap);
+
+  req.on('close', () => {
+    unsubscribe();
+  });
 }));
 
 router.post('/shows/:showId/hold', asyncHandler(async (req, res) => {

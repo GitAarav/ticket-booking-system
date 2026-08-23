@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { pool } = require('../db/pool');
 const { attemptSeatTransition } = require('./seatService');
+const { notifySeatmapChanged } = require('./realtimeService');
 
 const OFFER_TTL_MINUTES = Number(process.env.WAITLIST_OFFER_TTL_MINUTES) || 15;
 
@@ -136,6 +137,7 @@ async function sweepExpiredOffers() {
       }
 
       await client.query('COMMIT');
+      if (rowCount > 0) await notifySeatmapChanged(offer.show_id);
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;
