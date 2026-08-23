@@ -111,6 +111,14 @@ Verified with two genuinely simultaneous, independent SSE connections (`curl -N`
 - [ ] **Redis pub/sub path — not verified, no live Redis instance available.** The in-process `EventEmitter` path (what actually runs locally, since `REDIS_URL` is unset) is fully proven above; the Redis-backed path is implemented behind the identical interface but untested. See `DECISIONS.md`.
 - [ ] **Browser `EventSource` + auth header — known gap, not yet solved.** Verified via `curl` (which can set headers); native browser `EventSource` cannot, so this needs a decision at frontend-integration time. See `DECISIONS.md`.
 
+## Checkpoint 11 — API contract freeze
+
+- [x] `docs/API_CONTRACT.yaml` parses as valid YAML — 23 paths, 29 operations, 19 reusable schemas, 6 tags
+- [x] Passes a real OpenAPI 3.0 validator (`npx @apidevtools/swagger-cli validate`) — spec-compliant, not just syntactically valid text
+- [x] Cross-checked against the actual route files (`auth.js`, `admin.js`, `organiser.js`, `customer.js`, `offers.js`) one by one while writing it, not written from memory
+- [x] Spot-checked against the real running server: `POST /auth/register` with the exact documented example payload → real response matched the documented `AuthResponse` schema exactly
+- [x] Deliberate exclusion documented: `GET /admin/ping` (Checkpoint 1 test scaffolding, never a real feature) is left out of the frozen contract on purpose — see `DECISIONS.md`
+
 ## Not yet reached
 
-Checkpoints 11–12 (API contract freeze, backend deploy) — see `ORCHESTRATION.md` for what each will need to verify.
+Checkpoint 12 (backend deploy) — see `ORCHESTRATION.md` for what it will need to verify.

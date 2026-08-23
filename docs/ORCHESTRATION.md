@@ -93,9 +93,10 @@ Commit message style: `type: short description`, one logical change per commit, 
 - **Verify:** two SSE clients on one show; a hold in one arrives on the other within ~1s.
 - In-process path fully verified with two real simultaneous `curl -N` SSE clients (see `TEST_CHECKLIST.md`). Redis-backed path implemented behind the same interface but needs a live Redis instance to actually test — deferred to Checkpoint 12 (deploy, when Upstash gets provisioned). Also flagged: browser `EventSource` can't set auth headers — a Phase C frontend-integration decision, not fixed now. See `DECISIONS.md`.
 
-**Checkpoint 11 — API contract freeze**
+**Checkpoint 11 — API contract freeze — ✅ done**
 - `28` OpenAPI/Postman doc generated from the real endpoints
 - **Verify:** every endpoint callable in Postman with example payloads. **This doc, not the server source, goes to Antigravity.**
+- `docs/API_CONTRACT.yaml` — 29 endpoints, OpenAPI 3.0, validated with a real validator + spot-checked against the live server. Results in `TEST_CHECKLIST.md`. This is the file to hand to Antigravity for Phase B.
 
 **Checkpoint 12 — Backend deploy**
 - `29` Render config + env (Neon, Upstash, SendGrid)
