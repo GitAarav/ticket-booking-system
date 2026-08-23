@@ -1,7 +1,8 @@
+const jwt = require('jsonwebtoken');
 const { pool } = require('../db/pool');
 const { attemptSeatTransition } = require('./seatService');
 
-const OFFER_TTL_MINUTES = process.env.WAITLIST_OFFER_TTL_MINUTES || 15;
+const OFFER_TTL_MINUTES = Number(process.env.WAITLIST_OFFER_TTL_MINUTES) || 15;
 
 async function isSoldOut(showId, categoryId) {
   const { rows } = await pool.query(
@@ -31,6 +32,40 @@ async function joinWaitlist({ showId, categoryId, customerId }) {
   return rows[0];
 }
 
+async function getWaitlistEntry(id) {
+  const { rows } = await pool.query(`SELECT * FROM waitlist_entries WHERE id = $1`, [id]);
+  return rows[0];
+}
+
+async function markWaitlistEntryBooked(id) {
+  await pool.query(
+    `UPDATE waitlist_entries SET status = 'booked' WHERE id = $1 AND status = 'offered'`,
+    [id]
+  );
+}
+
+// The token IS the credential for /offers/:token — no login required, same
+// idea as a password-reset link. expiresAt is passed in explicitly (rather
+// than always "now + 15 minutes") so a token can be regenerated later
+// (e.g. at actual email-send time) and still expire at the exact same
+// real-world moment as the offer itself, per offer_expires_at.
+function issueOfferToken(waitlistEntryId, expiresAt) {
+  const secondsRemaining = Math.max(1, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000));
+  return jwt.sign(
+    { waitlistEntryId, purpose: 'waitlist_offer' },
+    process.env.JWT_SECRET,
+    { expiresIn: secondsRemaining }
+  );
+}
+
+function verifyOfferToken(token) {
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  if (decoded.purpose !== 'waitlist_offer') {
+    throw new Error('not an offer token');
+  }
+  return decoded;
+}
+
 // The single place that decides who gets a freed seat next. Called both by
 // cancellation (a seat just freed up) and by the sweep's offer-expiry
 // cascade (an offer expired, try the next person for the same seat).
@@ -54,16 +89,19 @@ async function offerNextInWaitlist(client, { showId, categoryId, seatId }) {
   });
   if (!seat) return null;
 
+  const expiresAt = new Date(Date.now() + OFFER_TTL_MINUTES * 60 * 1000);
+
   await client.query(
     `UPDATE waitlist_entries
-     SET status = 'offered',
-         offer_expires_at = now() + ($2 || ' minutes')::interval,
-         offered_seat_id = $3
+     SET status = 'offered', offer_expires_at = $2, offered_seat_id = $3
      WHERE id = $1`,
-    [entry.id, OFFER_TTL_MINUTES, seatId]
+    [entry.id, expiresAt, seatId]
   );
 
-  return { waitlistEntryId: entry.id, customerId: entry.customer_id, seatId };
+  const token = issueOfferToken(entry.id, expiresAt);
+  console.log(`[waitlist] offered seat ${seatId} to customer ${entry.customer_id}, confirm token: ${token}`);
+
+  return { waitlistEntryId: entry.id, customerId: entry.customer_id, seatId, token, expiresAt };
 }
 
 async function sweepExpiredOffers() {
@@ -104,4 +142,14 @@ async function sweepExpiredOffers() {
   return { expired: staleOffers.length, cascaded };
 }
 
-module.exports = { isSoldOut, hasActiveEntry, joinWaitlist, offerNextInWaitlist, sweepExpiredOffers };
+module.exports = {
+  isSoldOut,
+  hasActiveEntry,
+  joinWaitlist,
+  getWaitlistEntry,
+  markWaitlistEntryBooked,
+  issueOfferToken,
+  verifyOfferToken,
+  offerNextInWaitlist,
+  sweepExpiredOffers,
+};

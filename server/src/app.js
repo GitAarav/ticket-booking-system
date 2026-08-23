@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const organiserRoutes = require('./routes/organiser');
 const customerRoutes = require('./routes/customer');
+const offersRoutes = require('./routes/offers');
 
 const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL }));
@@ -21,6 +22,7 @@ app.use('/auth', authRoutes);
 app.use('/admin', adminRoutes);
 app.use('/organiser', organiserRoutes);
 app.use('/customer', customerRoutes);
+app.use('/offers', offersRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
