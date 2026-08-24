@@ -10,7 +10,7 @@ export function LiveSeatMap({
   selectedSeats,
   onToggleSeat,
   onOpenWaitlist,
-  pricing = [],
+  pricingByCategory = {},
 }) {
   const { addToast } = useToast();
   const [hoveredSeat, setHoveredSeat] = useState(null);
@@ -37,7 +37,7 @@ export function LiveSeatMap({
       if (!categoryStats[catId]) {
         categoryStats[catId] = {
           name: st.category?.name || 'Standard',
-          price: st.category?.price,
+          price: pricingByCategory[catId],
           total: 0,
           available: 0,
         };
@@ -84,7 +84,7 @@ export function LiveSeatMap({
               />
               <span style={{ fontWeight: 600 }}>{stat.name}</span>
               <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                ₹{stat.price || 400}
+                ₹{stat.price ?? '—'}
               </span>
               {stat.available === 0 && (
                 <button
@@ -123,11 +123,11 @@ export function LiveSeatMap({
                     <button
                       key={seat.id}
                       disabled={isBooked || isHeld}
-                      onClick={() => onToggleSeat(seat)}
+                      onClick={() => onToggleSeat({ ...seat, rowLabel: row.rowLabel })}
                       onMouseEnter={() => setHoveredSeat(seat)}
                       onMouseLeave={() => setHoveredSeat(null)}
                       className={`seat-btn ${seat.status} ${isSelected ? 'selected' : ''}`}
-                      title={`${row.rowLabel}${seat.seatNumber} • ${seat.category?.name || 'Standard'} (₹${seat.category?.price || 400}) - Status: ${seat.status}`}
+                      title={`${row.rowLabel}${seat.seatNumber} • ${seat.category?.name || 'Standard'} (₹${pricingByCategory[seat.category?.id] ?? '—'}) - Status: ${seat.status}`}
                     >
                       {isSelected ? (
                         <Check size={14} strokeWidth={3} />
@@ -201,7 +201,7 @@ export function LiveSeatMap({
         >
           <Sparkles size={14} color="var(--accent-lime)" />
           <span>
-            SEAT <strong>{hoveredSeat.id.split('-').slice(-2).join('')}</strong> • {hoveredSeat.category?.name || 'Standard'} • ₹{hoveredSeat.category?.price || 400} • STATUS:{' '}
+            SEAT <strong>{hoveredSeat.seatNumber}</strong> • {hoveredSeat.category?.name || 'Standard'} • ₹{pricingByCategory[hoveredSeat.category?.id] ?? '—'} • STATUS:{' '}
             <strong style={{ color: hoveredSeat.status === 'available' ? 'var(--accent-lime)' : 'var(--accent-pink)' }}>
               {hoveredSeat.status.toUpperCase()}
             </strong>

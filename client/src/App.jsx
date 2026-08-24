@@ -4,7 +4,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
-import { AuthModal } from './components/AuthModal';
 
 import { HomePage } from './pages/HomePage';
 import { ExplorePage } from './pages/ExplorePage';
@@ -16,38 +15,54 @@ import { AdminVenuesPage } from './pages/AdminVenuesPage';
 import { AboutPage } from './pages/AboutPage';
 import { ContactPage } from './pages/ContactPage';
 import { AuthPage } from './pages/AuthPage';
+import { customerApi } from './services/api';
+import { useToast } from './context/ToastContext';
 
 export function AppContent() {
   const { user } = useAuth();
+  const { addToast } = useToast();
+  const [offerTokenFromUrl] = useState(() => new URLSearchParams(window.location.search).get('offerToken'));
   const [currentView, setView] = useState(() => {
+    if (offerTokenFromUrl) return 'offer-redeem';
     return localStorage.getItem('pulse_user') ? 'home' : 'auth';
   });
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedShow, setSelectedShow] = useState(null);
 
-  // If user logs out, immediately route to auth page
+  // If user logs out, immediately route to auth page — except the offer-claim
+  // page, which works without being logged in (the token itself is the
+  // credential, matching the backend's unauthenticated /offers/:token/confirm).
   useEffect(() => {
-    if (!user && currentView !== 'auth') {
+    if (!user && currentView !== 'auth' && currentView !== 'offer-redeem') {
       setView('auth');
     }
   }, [user, currentView]);
 
-  const handleSelectEvent = (evt, show = null) => {
+  const handleSelectEvent = async (evt, show = null) => {
     if (!user) {
       setView('auth');
       return;
     }
-    setSelectedEvent(evt);
-    setSelectedShow(
-      show || {
-        id: 'show-01',
-        event_id: evt.id,
-        show_date: '2026-09-10',
-        show_time: '18:30',
-        venue_name: 'PVR INOX Neo-Plex Horizon',
-        venue_address: 'Lower Parel, Mumbai',
+
+    let targetShow = show;
+    if (!targetShow) {
+      // No specific showtime picked (e.g. clicked "Book Tickets" straight from a
+      // card) — look up this event's real showtimes instead of guessing one.
+      try {
+        const shows = await customerApi.getShowsForEvent(evt.id);
+        if (shows.length === 0) {
+          addToast('No showtimes scheduled for this event yet.', 'error');
+          return;
+        }
+        targetShow = shows[0];
+      } catch (err) {
+        addToast(err.message || 'Could not load showtimes for this event', 'error');
+        return;
       }
-    );
+    }
+
+    setSelectedEvent(evt);
+    setSelectedShow(targetShow);
     setView('seats');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -67,8 +82,10 @@ export function AppContent() {
       <Navbar currentView={currentView} setView={handleNavigation} />
 
       <main className="main-content">
-        {/* If user is not logged in, always present Auth login view first */}
-        {!user || currentView === 'auth' ? (
+        {/* Offer claims work without being logged in — the token is the credential */}
+        {currentView === 'offer-redeem' ? (
+          <OfferClaimPage setView={handleNavigation} initialToken={offerTokenFromUrl} />
+        ) : !user || currentView === 'auth' ? (
           <AuthPage setView={handleNavigation} />
         ) : (
           <>
@@ -101,12 +118,6 @@ export function AppContent() {
               />
             )}
 
-            {currentView === 'offer-redeem' && (
-              <OfferClaimPage
-                setView={handleNavigation}
-              />
-            )}
-
             {currentView === 'organiser' && (
               <OrganiserStudioPage
                 setView={handleNavigation}
@@ -133,7 +144,6 @@ export function AppContent() {
       </main>
 
       <Footer setView={handleNavigation} />
-      <AuthModal />
     </div>
   );
 }

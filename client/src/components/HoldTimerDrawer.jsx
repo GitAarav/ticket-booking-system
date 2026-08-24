@@ -46,7 +46,7 @@ export function HoldTimerDrawer({
 
   if (selectedSeats.length === 0) return null;
 
-  const totalPrice = selectedSeats.reduce((sum, s) => sum + Number(s.category?.price || 400), 0);
+  const totalPrice = selectedSeats.reduce((sum, s) => sum + Number(s.price || 0), 0);
 
   return (
     <div className="hold-drawer">
@@ -83,7 +83,7 @@ export function HoldTimerDrawer({
             <div style={{ fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span>{selectedSeats.length} Seat{selectedSeats.length > 1 ? 's' : ''} Selected</span>
               <span className="pill-tag pill-tag-lime">
-                {selectedSeats.map((s) => s.id.split('-').slice(-2).join('')).join(', ')}
+                {selectedSeats.map((s) => `${s.rowLabel}${s.seatNumber}`).join(', ')}
               </span>
             </div>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>

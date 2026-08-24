@@ -62,9 +62,9 @@ export function EmailDeliveryModal({ booking, onClose }) {
               <Mail size={18} />
             </div>
             <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>Delivered to Customer Inbox</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>Email Preview</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                To: {booking.customer_email || 'alex.hunter@pulse.io'}
+                This is what gets sent to your account's inbox
               </div>
             </div>
           </div>

@@ -13,34 +13,14 @@ export function BookingModal({
 }) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const [customerName, setCustomerName] = useState(user?.name || 'Alex Hunter');
-  const [customerEmail, setCustomerEmail] = useState(user?.email || 'alex.hunter@pulse.io');
   const [paymentMethod, setPaymentMethod] = useState('applepay');
-  const [promoCode, setPromoCode] = useState('');
-  const [discountPercent, setDiscountPercent] = useState(0);
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const baseTotal = selectedSeats.reduce((sum, s) => sum + Number(s.category?.price || 400), 0);
-  const discountAmount = (baseTotal * discountPercent) / 100;
-  const finalTotal = baseTotal - discountAmount;
-
-  const handleApplyPromo = () => {
-    if (promoCode.trim().toUpperCase() === 'GENZ20' || promoCode.trim().toUpperCase() === 'PULSE') {
-      setDiscountPercent(20);
-      addToast('🎉 Promo code applied! 20% discount added.', 'success');
-    } else {
-      addToast('Invalid promo code. Try "GENZ20" or "PULSE"', 'error');
-    }
-  };
+  const finalTotal = selectedSeats.reduce((sum, s) => sum + Number(s.price || 0), 0);
 
   const handlePayAndConfirm = async () => {
-    if (!customerEmail.trim()) {
-      addToast('Please enter a valid email to receive your QR tickets', 'error');
-      return;
-    }
-
     setLoading(true);
     try {
       confetti({
@@ -50,15 +30,12 @@ export function BookingModal({
         colors: ['#CCFF00', '#00F0FF', '#FF2E63', '#8B5CF6'],
       });
 
-      await onConfirmSuccess({
-        name: customerName,
-        email: customerEmail,
-      });
+      await onConfirmSuccess();
 
-      addToast(`🎉 Tickets confirmed! QR code email delivered to ${customerEmail}`, 'success');
+      addToast('Booking confirmed! A confirmation email is on its way.', 'success');
       onClose();
     } catch (err) {
-      addToast(err.message || 'Payment confirmation error', 'error');
+      addToast(err.message || 'Booking confirmation failed', 'error');
     } finally {
       setLoading(false);
     }
@@ -88,30 +65,10 @@ export function BookingModal({
           </p>
         </div>
 
-        {/* Customer Details Inputs */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-          <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label">Customer Name</label>
-            <input
-              type="text"
-              required
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="form-input"
-              placeholder="Your Name"
-            />
-          </div>
-          <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label">Email (For QR Ticket)</label>
-            <input
-              type="email"
-              required
-              value={customerEmail}
-              onChange={(e) => setCustomerEmail(e.target.value)}
-              className="form-input"
-              placeholder="your.email@example.com"
-            />
-          </div>
+        {/* Booking Account — the ticket always goes to the logged-in account */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+          <User size={14} />
+          Booking as <strong style={{ color: 'var(--text-primary)' }}>{user?.name}</strong> ({user?.email})
         </div>
 
         {/* Order Summary Card */}
@@ -131,19 +88,9 @@ export function BookingModal({
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             <span>Selected Seats ({selectedSeats.length}):</span>
             <span className="pill-tag pill-tag-lime">
-              {selectedSeats.map((s) => s.id.split('-').slice(-2).join('')).join(', ')}
+              {selectedSeats.map((s) => `${s.rowLabel}${s.seatNumber}`).join(', ')}
             </span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            <span>Subtotal:</span>
-            <span>₹{baseTotal.toFixed(2)}</span>
-          </div>
-          {discountPercent > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px', fontSize: '0.85rem', color: 'var(--accent-lime)' }}>
-              <span>Promo Discount (20%):</span>
-              <span>- ₹{discountAmount.toFixed(2)}</span>
-            </div>
-          )}
           <div
             style={{
               display: 'flex',
@@ -158,26 +105,6 @@ export function BookingModal({
             <span>Total Payable:</span>
             <span style={{ color: 'var(--accent-lime)' }}>₹{finalTotal.toFixed(2)}</span>
           </div>
-        </div>
-
-        {/* Promo Code Input */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-          <input
-            type="text"
-            placeholder="Promo Code (Try: GENZ20)"
-            value={promoCode}
-            onChange={(e) => setPromoCode(e.target.value)}
-            className="form-input"
-            style={{ textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}
-          />
-          <button
-            type="button"
-            onClick={handleApplyPromo}
-            className="btn-secondary"
-            style={{ padding: '0 20px', whiteSpace: 'nowrap' }}
-          >
-            Apply
-          </button>
         </div>
 
         {/* Payment Methods */}

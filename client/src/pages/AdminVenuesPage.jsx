@@ -1,24 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { adminApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
-import { ShieldAlert, Plus, MapPin, Grid, Layers, Sparkles, Trash2 } from 'lucide-react';
+import { Plus, MapPin, Grid, Trash2 } from 'lucide-react';
 
 export function AdminVenuesPage() {
   const { addToast } = useToast();
   const [venues, setVenues] = useState([]);
   const [venueName, setVenueName] = useState('');
-  const [venueCity, setVenueCity] = useState('Mumbai');
   const [venueAddress, setVenueAddress] = useState('');
   const [loadingVenue, setLoadingVenue] = useState(false);
 
-  // Category Configuration
   const [categories, setCategories] = useState([
-    { id: 'cat-vip', name: 'VIP Recliner', price: '750' },
-    { id: 'cat-premium', name: 'Prime Club', price: '500' },
-    { id: 'cat-standard', name: 'Standard Cine', price: '320' },
+    { name: 'VIP Recliner' },
+    { name: 'Prime Club' },
+    { name: 'Standard Cine' },
   ]);
 
-  // Bulk Grid Dimensions
   const [rowsCount, setRowsCount] = useState(4);
   const [seatsPerRow, setSeatsPerRow] = useState(8);
 
@@ -32,8 +29,7 @@ export function AdminVenuesPage() {
   }, []);
 
   const handleAddCategory = () => {
-    const newId = `cat-custom-${Date.now()}`;
-    setCategories((prev) => [...prev, { id: newId, name: 'Executive Gold', price: '450' }]);
+    setCategories((prev) => [...prev, { name: '' }]);
   };
 
   const handleRemoveCategory = (index) => {
@@ -44,28 +40,38 @@ export function AdminVenuesPage() {
     setCategories((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleCategoryChange = (index, field, value) => {
-    setCategories((prev) =>
-      prev.map((cat, i) => (i === index ? { ...cat, [field]: value } : cat))
-    );
+  const handleCategoryChange = (index, value) => {
+    setCategories((prev) => prev.map((cat, i) => (i === index ? { ...cat, name: value } : cat)));
   };
 
   const handleCreateVenue = async (e) => {
     e.preventDefault();
     if (!venueName.trim()) return;
+    if (categories.some((c) => !c.name.trim())) {
+      addToast('Every seat category needs a name', 'error');
+      return;
+    }
     setLoadingVenue(true);
     try {
-      const rows = Array.from({ length: rowsCount }, (_, i) => String.fromCharCode(65 + i));
-      await adminApi.createVenue({
-        name: venueName,
-        city: venueCity,
-        address: venueAddress,
-        categories,
-        rows,
-        seatsPerRow,
-      });
+      const venue = await adminApi.createVenue({ name: venueName, address: venueAddress });
 
-      addToast(`🎉 Venue "${venueName}" created with ${categories.length} seat categories!`, 'success');
+      const createdCategories = [];
+      for (const cat of categories) {
+        const created = await adminApi.createCategory(venue.id, cat.name);
+        createdCategories.push(created);
+      }
+
+      const rowLabels = Array.from({ length: rowsCount }, (_, i) => String.fromCharCode(65 + i));
+      const seats = [];
+      rowLabels.forEach((rowLabel, rIdx) => {
+        const category = createdCategories[Math.min(rIdx, createdCategories.length - 1)];
+        for (let seatNumber = 1; seatNumber <= seatsPerRow; seatNumber++) {
+          seats.push({ categoryId: category.id, rowLabel, seatNumber, posX: seatNumber, posY: rIdx });
+        }
+      });
+      await adminApi.bulkCreateSeats(venue.id, seats);
+
+      addToast(`Venue "${venueName}" created with ${createdCategories.length} categories and ${seats.length} seats.`, 'success');
       setVenueName('');
       setVenueAddress('');
       await fetchVenues();
@@ -78,47 +84,32 @@ export function AdminVenuesPage() {
 
   return (
     <div className="container" style={{ paddingBottom: '60px' }}>
-      {/* Header */}
       <div style={{ marginBottom: '32px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
           <span className="pill-tag pill-tag-concert">ADMIN CONSOLE</span>
-          <span className="pill-tag pill-tag-lime">VENUE & SEATMAP ARCHITECT</span>
+          <span className="pill-tag pill-tag-lime">VENUE & SEATMAP BUILDER</span>
         </div>
-        <h1 style={{ fontSize: '2.4rem', fontWeight: 900, marginBottom: '8px' }}>
-          Venue Management & Blueprint Builder
-        </h1>
+        <h1 style={{ fontSize: '2.4rem', fontWeight: 900, marginBottom: '8px' }}>Venue Management</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-          Register cinema halls, multiplexes, and concert stadiums with custom tier categories and seat grid dimensions.
+          Register a venue with seat categories and a seat grid. Organisers pick from these venues when scheduling shows.
         </p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '32px' }}>
-        {/* Create Venue Form */}
         <div className="glass-panel" style={{ padding: '32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-            <div
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
-                background: 'rgba(255, 46, 99, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--accent-pink)',
-              }}
-            >
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(255, 46, 99, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-pink)' }}>
               <Plus size={20} />
             </div>
             <div>
               <h2 style={{ fontSize: '1.3rem', fontWeight: 800 }}>Create New Venue</h2>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Define multiplex / stadium location</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Venue, categories, and seat grid — all in one step</div>
             </div>
           </div>
 
           <form onSubmit={handleCreateVenue}>
             <div className="form-group">
-              <label className="form-label">Venue / Multiplex Name</label>
+              <label className="form-label">Venue Name</label>
               <input
                 type="text"
                 required
@@ -129,47 +120,22 @@ export function AdminVenuesPage() {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
-              <div className="form-group">
-                <label className="form-label">City</label>
-                <select
-                  value={venueCity}
-                  onChange={(e) => setVenueCity(e.target.value)}
-                  className="form-input"
-                >
-                  <option value="Mumbai">Mumbai</option>
-                  <option value="Delhi NCR">Delhi NCR</option>
-                  <option value="Bengaluru">Bengaluru</option>
-                  <option value="Hyderabad">Hyderabad</option>
-                  <option value="Chennai">Chennai</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Physical Address</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Phoenix MarketCity, Kurla"
-                  value={venueAddress}
-                  onChange={(e) => setVenueAddress(e.target.value)}
-                  className="form-input"
-                />
-              </div>
+            <div className="form-group">
+              <label className="form-label">Address</label>
+              <input
+                type="text"
+                placeholder="e.g. Phoenix MarketCity, Kurla, Mumbai"
+                value={venueAddress}
+                onChange={(e) => setVenueAddress(e.target.value)}
+                className="form-input"
+              />
             </div>
 
-            {/* Custom Seat Categories */}
             <div style={{ marginBottom: '20px', background: 'var(--bg-surface-elevated)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <label className="form-label" style={{ margin: 0, color: 'var(--accent-cyan)' }}>
-                  Seat Categories & Base Pricing
-                </label>
-                <button
-                  type="button"
-                  onClick={handleAddCategory}
-                  className="btn-outline"
-                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                >
-                  <Plus size={12} /> Add Tier
+                <label className="form-label" style={{ margin: 0, color: 'var(--accent-cyan)' }}>Seat Categories</label>
+                <button type="button" onClick={handleAddCategory} className="btn-outline" style={{ padding: '4px 10px', fontSize: '0.75rem' }}>
+                  <Plus size={12} /> Add Category
                 </button>
               </div>
 
@@ -178,71 +144,40 @@ export function AdminVenuesPage() {
                   <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <input
                       type="text"
-                      placeholder="Category Name"
+                      placeholder="Category name"
                       value={cat.name}
-                      onChange={(e) => handleCategoryChange(idx, 'name', e.target.value)}
+                      onChange={(e) => handleCategoryChange(idx, e.target.value)}
                       className="form-input"
-                      style={{ flex: 2, padding: '6px 10px', fontSize: '0.85rem' }}
+                      style={{ flex: 1, padding: '6px 10px', fontSize: '0.85rem' }}
                     />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>₹</span>
-                      <input
-                        type="number"
-                        min="50"
-                        placeholder="Price"
-                        value={cat.price}
-                        onChange={(e) => handleCategoryChange(idx, 'price', e.target.value)}
-                        className="form-input"
-                        style={{ padding: '6px 8px', fontSize: '0.85rem', fontFamily: 'var(--font-mono)' }}
-                      />
-                    </div>
                     {categories.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCategory(idx)}
-                        className="btn-icon"
-                        style={{ padding: '6px' }}
-                      >
+                      <button type="button" onClick={() => handleRemoveCategory(idx)} className="btn-icon" style={{ padding: '6px' }}>
                         <Trash2 size={14} color="var(--accent-pink)" />
                       </button>
                     )}
                   </div>
                 ))}
               </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+                Prices are set per show by the organiser, not here — a venue's categories are just tiers (e.g. VIP, Standard).
+              </p>
             </div>
 
-            <button
-              type="submit"
-              disabled={loadingVenue}
-              className="btn-primary"
-              style={{ width: '100%', padding: '12px' }}
-            >
-              {loadingVenue ? 'Registering...' : 'Register Venue & Categories'}
+            <button type="submit" disabled={loadingVenue} className="btn-primary" style={{ width: '100%', padding: '12px' }}>
+              {loadingVenue ? 'Creating venue, categories & seats…' : 'Create Venue'}
             </button>
           </form>
         </div>
 
-        {/* Blueprint Layout Grid Preview */}
         <div className="glass-panel" style={{ padding: '32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-            <div
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
-                background: 'rgba(204, 255, 0, 0.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--accent-lime)',
-              }}
-            >
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(204, 255, 0, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-lime)' }}>
               <Grid size={20} />
             </div>
             <div>
               <h2 style={{ fontSize: '1.3rem', fontWeight: 800 }}>Seat Grid Dimensions</h2>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Configured: {rowsCount} Rows × {seatsPerRow} Seats ({rowsCount * seatsPerRow} Seats)
+                {rowsCount} Rows × {seatsPerRow} Seats ({rowsCount * seatsPerRow} seats total) — rows are assigned to categories in order
               </div>
             </div>
           </div>
@@ -272,30 +207,16 @@ export function AdminVenuesPage() {
             </div>
           </div>
 
-          {/* Blueprint Mini-Grid */}
-          <div
-            style={{
-              background: 'var(--bg-surface-elevated)',
-              border: '1px solid var(--border-medium)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
+          <div style={{ background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-medium)', borderRadius: 'var(--radius-lg)', padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginBottom: '8px' }}>
-              ✦ SCREEN BLUEPRINT ORIENTATION ✦
+              ✦ SEAT GRID PREVIEW ✦
             </div>
             {Array.from({ length: rowsCount }).map((_, rIdx) => {
               const rowChar = String.fromCharCode(65 + rIdx);
               const catForThisRow = categories[Math.min(rIdx, categories.length - 1)];
               return (
                 <div key={rIdx} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <span style={{ width: '16px', fontSize: '0.7rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                    {rowChar}
-                  </span>
+                  <span style={{ width: '16px', fontSize: '0.7rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{rowChar}</span>
                   {Array.from({ length: seatsPerRow }).map((_, sIdx) => (
                     <div
                       key={sIdx}
@@ -323,30 +244,30 @@ export function AdminVenuesPage() {
         </div>
       </div>
 
-      {/* Registered Venues List */}
       <div style={{ marginTop: '48px' }}>
-        <h2 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '20px' }}>Active Registered Venues</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-          {venues.map((v) => (
-            <div key={v.id} className="glass-panel" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <MapPin size={16} color="var(--accent-lime)" />
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{v.name}</h3>
-                <span className="pill-tag pill-tag-movie" style={{ fontSize: '0.7rem' }}>{v.city || 'Mumbai'}</span>
+        <h2 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '20px' }}>Your Registered Venues</h2>
+        {venues.length === 0 ? (
+          <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+            No venues created yet.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+            {venues.map((v) => (
+              <div key={v.id} className="glass-panel" style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <MapPin size={16} color="var(--accent-lime)" />
+                  <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{v.name}</h3>
+                </div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '16px' }}>{v.address || 'No address provided'}</p>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {v.categories?.map((c) => (
+                    <span key={c.id} className="pill-tag pill-tag-lime">{c.name}</span>
+                  ))}
+                </div>
               </div>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '16px' }}>
-                {v.address || 'Standard Multiplex Address'}
-              </p>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {v.categories?.map((c) => (
-                  <span key={c.id} className="pill-tag pill-tag-lime">
-                    {c.name} (₹{c.price})
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
