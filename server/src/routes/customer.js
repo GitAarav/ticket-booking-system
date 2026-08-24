@@ -120,6 +120,11 @@ router.post('/shows/:showId/waitlist', asyncHandler(async (req, res) => {
   const { categoryId } = req.body;
   if (!categoryId) return res.status(400).json({ error: 'categoryId is required' });
 
+  const validCategory = await waitlistService.categoryExistsForShow(req.params.showId, categoryId);
+  if (!validCategory) {
+    return res.status(400).json({ error: 'categoryId does not belong to this show' });
+  }
+
   const soldOut = await waitlistService.isSoldOut(req.params.showId, categoryId);
   if (!soldOut) {
     return res.status(400).json({ error: 'seats are still available in this category; no need to join the waitlist' });

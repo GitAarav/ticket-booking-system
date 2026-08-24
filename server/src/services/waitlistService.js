@@ -5,6 +5,14 @@ const { notifySeatmapChanged } = require('./realtimeService');
 
 const OFFER_TTL_MINUTES = Number(process.env.WAITLIST_OFFER_TTL_MINUTES) || 15;
 
+async function categoryExistsForShow(showId, categoryId) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM show_seats WHERE show_id = $1 AND category_id = $2 LIMIT 1`,
+    [showId, categoryId]
+  );
+  return rows.length > 0;
+}
+
 async function isSoldOut(showId, categoryId) {
   const { rows } = await pool.query(
     `SELECT COUNT(*)::int AS count FROM show_seats
@@ -150,6 +158,7 @@ async function sweepExpiredOffers() {
 }
 
 module.exports = {
+  categoryExistsForShow,
   isSoldOut,
   hasActiveEntry,
   joinWaitlist,

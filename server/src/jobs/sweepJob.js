@@ -1,21 +1,39 @@
 const cron = require('node-cron');
 const { pool } = require('../db/pool');
 const { attemptSeatTransition } = require('../services/seatService');
-const { sweepExpiredOffers } = require('../services/waitlistService');
+const { sweepExpiredOffers, offerNextInWaitlist } = require('../services/waitlistService');
 const { sendPendingEmails } = require('../services/emailService');
 const { notifySeatmapChanged } = require('../services/realtimeService');
 
+// A hold that simply expires (customer abandoned checkout, never confirmed)
+// is a freed seat exactly like a cancellation — the waitlist should get a
+// shot at it too, not just seats freed by explicit booking cancellations.
 async function sweepExpiredHolds() {
   const { rows: expired } = await pool.query(
     `SELECT id, show_id FROM show_seats WHERE status = 'held' AND held_until < now()`
   );
 
+  let releasedCount = 0;
   for (const { id, show_id } of expired) {
-    const released = await attemptSeatTransition(pool, { seatId: id, toStatus: 'available' });
-    if (released) await notifySeatmapChanged(show_id);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const released = await attemptSeatTransition(client, { seatId: id, toStatus: 'available' });
+      if (released) {
+        await offerNextInWaitlist(client, { showId: show_id, categoryId: released.category_id, seatId: id });
+        releasedCount += 1;
+      }
+      await client.query('COMMIT');
+      if (released) await notifySeatmapChanged(show_id);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
-  return expired.length;
+  return releasedCount;
 }
 
 function startSweepJob() {
