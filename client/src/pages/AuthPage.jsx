@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { User, Layers, ShieldAlert, ArrowRight, Lock, Mail, Sparkles, CheckCircle2, Film } from 'lucide-react';
+import { ArrowRight, Film } from 'lucide-react';
 
 export function AuthPage({ setView }) {
-  const { login, register, switchDemoRole } = useAuth();
+  const { login, register } = useAuth();
   const { addToast } = useToast();
   const [tab, setTab] = useState('login'); // 'login' | 'register'
   const [role, setRole] = useState('customer'); // 'customer' | 'organiser'
@@ -32,14 +32,6 @@ export function AuthPage({ setView }) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickDemo = (selectedRole) => {
-    switchDemoRole(selectedRole);
-    addToast(`Signed in as demo ${selectedRole}!`, 'success');
-    if (selectedRole === 'organiser') setView('organiser');
-    else if (selectedRole === 'admin') setView('admin');
-    else setView('explore');
   };
 
   return (
@@ -70,50 +62,6 @@ export function AuthPage({ setView }) {
               ? 'Access your tickets, seat holds, and waitlist allocations'
               : 'Book movie seats, manage events, or configure venue layouts'}
           </p>
-        </div>
-
-        {/* 1-Click Fast Demo Logins */}
-        <div
-          style={{
-            background: 'var(--bg-surface-elevated)',
-            border: '1px solid var(--border-medium)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '14px',
-            marginBottom: '20px',
-          }}
-        >
-          <div style={{ fontSize: '0.7rem', fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' }}>
-            ⚡ 1-Click Instant Evaluation Logins
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('customer')}
-              className="btn-outline"
-              style={{ padding: '8px 4px', fontSize: '0.75rem', flexDirection: 'column', gap: '4px' }}
-            >
-              <User size={14} color="var(--accent-lime)" />
-              <span>Customer</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('organiser')}
-              className="btn-outline"
-              style={{ padding: '8px 4px', fontSize: '0.75rem', flexDirection: 'column', gap: '4px' }}
-            >
-              <Layers size={14} color="var(--accent-purple)" />
-              <span>Organiser</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickDemo('admin')}
-              className="btn-outline"
-              style={{ padding: '8px 4px', fontSize: '0.75rem', flexDirection: 'column', gap: '4px' }}
-            >
-              <ShieldAlert size={14} color="var(--accent-pink)" />
-              <span>Admin</span>
-            </button>
-          </div>
         </div>
 
         {/* Tab Toggle */}
@@ -233,8 +181,8 @@ export function AuthPage({ setView }) {
             <input
               type="password"
               required
-              minLength={6}
-              placeholder="••••••••"
+              minLength={8}
+              placeholder="•••••••• (min. 8 characters)"
               className="form-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

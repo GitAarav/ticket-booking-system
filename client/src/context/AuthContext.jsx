@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { authApi } from '../services/api';
 
 const AuthContext = createContext();
@@ -15,63 +15,36 @@ export function AuthProvider({ children }) {
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem('pulse_user', JSON.stringify(user));
-    } else {
-      localStorage.removeItem('pulse_user');
-    }
-  }, [user]);
+  // localStorage is written synchronously here, not via a useEffect keyed on
+  // user/token — the page that appears right after login fires its own
+  // authenticated requests immediately, and a useEffect write can lose that
+  // race (request goes out before the token is persisted), which looks like
+  // "login doesn't work" when it's really a 401 bouncing you back out.
+  const applySession = (nextUser, nextToken) => {
+    if (nextUser) localStorage.setItem('pulse_user', JSON.stringify(nextUser));
+    else localStorage.removeItem('pulse_user');
 
-  useEffect(() => {
-    if (token) {
-      localStorage.setItem('pulse_token', token);
-    } else {
-      localStorage.removeItem('pulse_token');
-    }
-  }, [token]);
+    if (nextToken) localStorage.setItem('pulse_token', nextToken);
+    else localStorage.removeItem('pulse_token');
+
+    setUser(nextUser);
+    setToken(nextToken);
+  };
 
   const login = async ({ email, password }) => {
     const res = await authApi.login({ email, password });
-    if (res && res.user) {
-      setUser(res.user);
-      setToken(res.token);
-      return res.user;
-    }
-    throw new Error(res?.error || 'Login failed');
+    applySession(res.user, res.token);
+    return res.user;
   };
 
   const register = async ({ name, email, password, role }) => {
     const res = await authApi.register({ name, email, password, role });
-    if (res && res.user) {
-      setUser(res.user);
-      setToken(res.token);
-      return res.user;
-    }
-    throw new Error(res?.error || 'Registration failed');
+    applySession(res.user, res.token);
+    return res.user;
   };
 
   const logout = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('pulse_user');
-    localStorage.removeItem('pulse_token');
-  };
-
-  const switchDemoRole = (role) => {
-    if (role === 'admin') {
-      const u = { id: 'admin-01', name: 'Devin Vance (Admin)', email: 'admin@pulse.io', role: 'admin' };
-      setUser(u);
-      setToken('jwt-mock-admin');
-    } else if (role === 'organiser') {
-      const u = { id: 'org-01', name: 'Nova Stage Studio (Organiser)', email: 'producer@pulse.io', role: 'organiser' };
-      setUser(u);
-      setToken('jwt-mock-organiser');
-    } else {
-      const u = { id: 'user-customer-demo', name: 'Alex Hunter (Customer)', email: 'alex.hunter@pulse.io', role: 'customer' };
-      setUser(u);
-      setToken('jwt-mock-customer');
-    }
+    applySession(null, null);
   };
 
   return (
@@ -84,7 +57,6 @@ export function AuthProvider({ children }) {
         login,
         register,
         logout,
-        switchDemoRole,
         isAuthModalOpen,
         openAuthModal: () => setIsAuthModalOpen(true),
         closeAuthModal: () => setIsAuthModalOpen(false),

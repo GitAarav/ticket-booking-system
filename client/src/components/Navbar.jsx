@@ -23,9 +23,8 @@ import {
 
 export function Navbar({ currentView, setView }) {
   const { isDark, toggleTheme } = useTheme();
-  const { user, role, switchDemoRole, openAuthModal, logout } = useAuth();
+  const { user, role, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState('Mumbai');
   const [cityMenuOpen, setCityMenuOpen] = useState(false);
 
@@ -206,10 +205,9 @@ export function Navbar({ currentView, setView }) {
             {isDark ? <Sun size={18} color="var(--accent-lime)" /> : <Moon size={18} color="#0F172A" />}
           </button>
 
-          {/* Quick Role Switcher Pill */}
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setRoleMenuOpen(!roleMenuOpen)}
+          {/* Logged-in role badge — reflects the real account role, not switchable */}
+          {user && (
+            <div
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -238,48 +236,8 @@ export function Navbar({ currentView, setView }) {
                 }}
               />
               <span>{role}</span>
-            </button>
-
-            {/* Role Dropdown */}
-            {roleMenuOpen && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '110%',
-                  right: 0,
-                  width: '210px',
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-medium)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '8px',
-                  boxShadow: 'var(--shadow-lg)',
-                  zIndex: 200,
-                }}
-              >
-                <div style={{ padding: '6px 10px', fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  QUICK ROLE SWITCH
-                </div>
-                <button
-                  onClick={() => { switchDemoRole('customer'); setRoleMenuOpen(false); setView('explore'); }}
-                  style={{ width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}
-                >
-                  <User size={14} color="var(--accent-lime)" /> Customer Mode
-                </button>
-                <button
-                  onClick={() => { switchDemoRole('organiser'); setRoleMenuOpen(false); setView('organiser'); }}
-                  style={{ width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}
-                >
-                  <Layers size={14} color="var(--accent-purple)" /> Organiser Studio
-                </button>
-                <button
-                  onClick={() => { switchDemoRole('admin'); setRoleMenuOpen(false); setView('admin'); }}
-                  style={{ width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: '8px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}
-                >
-                  <ShieldAlert size={14} color="var(--accent-pink)" /> Admin Venues
-                </button>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* User Sign In / Profile */}
           {user ? (
