@@ -44,11 +44,6 @@ export function Footer({ setView }) {
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.6, marginBottom: '14px' }}>
               Your destination for instant movie tickets, live concerts, and arena world tours. Real-time seat maps and instant scannable passes.
             </p>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <span className="pill-tag pill-tag-lime">PVR INOX</span>
-              <span className="pill-tag pill-tag-movie">CINEPOLIS</span>
-              <span className="pill-tag pill-tag-concert">IMAX</span>
-            </div>
           </div>
 
           {/* Movies & Categories */}
@@ -88,7 +83,7 @@ export function Footer({ setView }) {
                 <button onClick={() => setView('bookings')} style={{ color: 'inherit' }}>Ticket Cancellation & Refunds</button>
               </li>
               <li>
-                <button onClick={() => setView('about')} style={{ color: 'inherit' }}>System Architecture & Design</button>
+                <button onClick={() => setView('about')} style={{ color: 'inherit' }}>How Booking Works</button>
               </li>
             </ul>
           </div>
