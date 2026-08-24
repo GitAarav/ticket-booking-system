@@ -119,6 +119,23 @@ Verified with two genuinely simultaneous, independent SSE connections (`curl -N`
 - [x] Spot-checked against the real running server: `POST /auth/register` with the exact documented example payload → real response matched the documented `AuthResponse` schema exactly
 - [x] Deliberate exclusion documented: `GET /admin/ping` (Checkpoint 1 test scaffolding, never a real feature) is left out of the frozen contract on purpose — see `DECISIONS.md`
 
+## Checkpoint 19 — wire frontend to backend, fix contract drift
+
+Frontend integration surfaced its own set of real bugs (documented in `DECISIONS.md`), plus two
+gaps in the frozen API contract that needed syncing back.
+
+- [x] `docs/API_CONTRACT.yaml` re-validated after adding `GET /organiser/venues`,
+  `GET /organiser/events/{eventId}/summary`, and `heldByCustomerId`/`heldUntil` on
+  `LiveSeatmapSeat` — `npx @apidevtools/swagger-cli validate` still passes
+- [x] Both new endpoints spot-checked against the live server: real responses matched the
+  newly documented `VenueWithCategories` and `EventBookingSummary` schemas exactly
+- [x] Frontend booking flow re-tested end to end against the real backend: hold → confirm →
+  cancel → waitlist join → offer cascade on both booking-cancellation and hold-expiry — see
+  `DECISIONS.md` for the specific bugs found and fixed along the way
+
 ## Not yet reached
 
-Checkpoint 12 (backend deploy) — see `ORCHESTRATION.md` for what it will need to verify.
+Checkpoints 12, 20–24 (deploy, e2e pass on the live deployment, README finalization, the
+system design write-up, seed data) — see `ORCHESTRATION.md` for what each will need to verify.
+Checkpoint 12 is blocked on Render/Neon/Upstash/SendGrid credentials only the project owner can
+provide.

@@ -70,6 +70,36 @@ components:
         venue_id: { type: string, format: uuid }
         name: { type: string }
 
+    VenueWithCategories:
+      allOf:
+        - $ref: '#/components/schemas/Venue'
+        - type: object
+          properties:
+            categories:
+              type: array
+              items: { $ref: '#/components/schemas/Category' }
+
+    EventShowSummary:
+      type: object
+      properties:
+        showId: { type: string, format: uuid }
+        showDate: { type: string, format: date }
+        showTime: { type: string }
+        ticketsSold: { type: integer }
+        revenue: { type: string, example: "1500.00" }
+        capacity: { type: integer }
+
+    EventBookingSummary:
+      type: object
+      properties:
+        showsCount: { type: integer }
+        ticketsSold: { type: integer }
+        totalRevenue: { type: string, example: "4500.00" }
+        occupancyRate: { type: string, example: "62.5%" }
+        shows:
+          type: array
+          items: { $ref: '#/components/schemas/EventShowSummary' }
+
     VenueSeat:
       type: object
       properties:
@@ -108,6 +138,8 @@ components:
         - type: object
           properties:
             status: { type: string, enum: [available, held, booked] }
+            heldByCustomerId: { type: string, format: uuid, nullable: true, description: "Set only while status is held; lets a customer's own client tell their held seats apart from seats held by someone else." }
+            heldUntil: { type: string, format: date-time, nullable: true }
 
     LiveSeatmapRow:
       type: object
@@ -417,6 +449,13 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: object, properties: { seatmap: { type: array, items: { $ref: '#/components/schemas/AdminSeatmapRow' } } } } } } }
 
+  /organiser/venues:
+    get:
+      tags: [Organiser]
+      summary: List every venue (with its categories), so an organiser can pick one when scheduling a show — unlike /admin/venues, this is deliberately not scoped to a single admin
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { venues: { type: array, items: { $ref: '#/components/schemas/VenueWithCategories' } } } } } } }
+
   /organiser/events:
     post:
       tags: [Organiser]
@@ -484,6 +523,15 @@ paths:
       summary: List an event's shows
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: object, properties: { shows: { type: array, items: { $ref: '#/components/schemas/Show' } } } } } } }
+
+  /organiser/events/{eventId}/summary:
+    parameters:
+      - { name: eventId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Organiser]
+      summary: Booking summary and revenue for one event (must be owned by caller), broken down per show — confirmed bookings only
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { summary: { $ref: '#/components/schemas/EventBookingSummary' } } } } } }
 
   /customer/events:
     get:

@@ -98,18 +98,57 @@ Commit message style: `type: short description`, one logical change per commit, 
 - **Verify:** every endpoint callable in Postman with example payloads. **This doc, not the server source, goes to Antigravity.**
 - `docs/API_CONTRACT.yaml` — 29 endpoints, OpenAPI 3.0, validated with a real validator + spot-checked against the live server. Results in `TEST_CHECKLIST.md`. This is the file to hand to Antigravity for Phase B.
 
-**Checkpoint 12 — Backend deploy**
+**Checkpoint 12 — Backend deploy — ⏳ blocked on you**
 - `29` Render config + env (Neon, Upstash, SendGrid)
-- **Verify:** live health check; re-run the full curl sequence against the deployed URL.
+- **Verify:** live health check; re-run the full curl sequence against the deployed URL; confirm
+  a real booking sends a real email with a scannable QR to an actual inbox (never verified once
+  so far — SendGrid has never had a real key configured).
+- **Blocked on:** a Render account, a production Neon connection string, an Upstash Redis URL,
+  and a real SendGrid API key + verified sender. None of these can be created by the agent.
 
-### Phase B — Frontend (Antigravity, against the checkpoint-11 contract only)
+### Phase B — Frontend (Antigravity, against the checkpoint-11 contract)
 
-13 — browsing/filter (`30`) · 14 — seat grid + countdown + SSE hook (`31`) · 15 — checkout/hold-confirm (`32`) · 16 — booking history/cancel (`33`) · 17 — organiser dashboard (`34`) · 18 — admin venue builder UI (`35`)
-**Verify per checkpoint:** manual click-through against the deployed backend.
+Antigravity built the frontend against the frozen contract as planned, but not cleanly through
+checkpoints 13–18 — it shipped as one large batch that turned out to be running entirely on
+fabricated client-side mock data (every API call silently fell back to invented data on
+failure, and nothing was ever wired to a real backend). That got discovered and fixed in Phase C
+below rather than as a separate Phase B pass. Functionally equivalent to 13–18 being done, just
+not achieved in that order.
 
 ### Phase C — Integration & polish (back here)
 
-19 — wire frontend to backend, fix contract drift (`36`) · 20 — Vercel deploy (`37`) · 21 — full end-to-end pass + bugfixes (`38`) · 22 — finalize README (`39`) · 23 — trim `SYSTEM_DESIGN.md` into the ≤800-word write-up deliverable (`40`) · 24 — seed/demo data script (`41`)
+**Checkpoint 19 — wire frontend to backend, fix contract drift — ✅ done**
+- `36` Rewired the frontend's mock-data API layer to the real backend (Vite dev proxy, no
+  fallback-to-fake-data), fixed the resulting cascade of real bugs this exposed (broken
+  organiser venue picker, silently-dropped venue categories/seats, ₹400-for-every-seat pricing,
+  a fake show ID that hung the seat map, a stale-selection race after a hold expires). See
+  `DECISIONS.md` for the full list.
+- Synced `docs/API_CONTRACT.yaml` with the two endpoints and two seatmap fields added during
+  that work (`GET /organiser/venues`, `GET /organiser/events/{eventId}/summary`,
+  `heldByCustomerId`/`heldUntil` on `LiveSeatmapSeat`) — it had drifted from the real API.
+- **Verify:** re-validated with `npx @apidevtools/swagger-cli validate` (same tool as the
+  original freeze) and spot-checked both new endpoints against the live server — responses
+  match the documented schemas exactly. Results in `TEST_CHECKLIST.md`.
+
+**Checkpoint 20 — Vercel deploy — ⏳ not started**
+- `37` Needs a configurable production API base URL in the frontend first (currently only works
+  via the dev-only Vite proxy) — see plan.
+- **Verify:** full click-through against the real deployed pair, not localhost.
+
+**Checkpoint 21 — full end-to-end pass + bugfixes — ⏳ not started**
+- `38` Re-run `TEST_CHECKLIST.md`'s scenarios against the live deployment.
+
+**Checkpoint 22 — finalize README — ⏳ not started**
+- `39` README currently has a stale claim (says the frontend is "built separately in
+  Antigravity, not this repo's source" — no longer true) and an empty section under "Seat hold
+  & waitlist logic". Needs the real hosted URLs once deployed.
+
+**Checkpoint 23 — trim `SYSTEM_DESIGN.md` into the ≤800-word write-up deliverable — ⏳ not started**
+- `40` The submission artifact the brief actually asks for doesn't exist yet — `SYSTEM_DESIGN.md`
+  is the ~1000-word internal working doc, not the trimmed deliverable.
+
+**Checkpoint 24 — seed/demo data script — ⏳ not started**
+- `41` So the live URL shows a populated app on first open, not an empty one.
 
 ~41 natural commit points across 25 checkpoints — comfortably over the 20-commit target.
 
