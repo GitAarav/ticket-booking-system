@@ -9,6 +9,17 @@ if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
+// Names and event titles are user/organiser-controlled text, not markup —
+// escape before dropping them into an HTML email body.
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function buildBookingConfirmationEmail(outboxRow) {
   const { rows } = await pool.query(
     `SELECT b.booking_reference, b.total_amount, u.email, u.name, e.title, s.show_date, s.show_time
@@ -29,8 +40,8 @@ async function buildBookingConfirmationEmail(outboxRow) {
     to: d.email,
     subject: `Booking confirmed: ${d.title}`,
     html: `
-      <p>Hi ${d.name},</p>
-      <p>Your booking for <strong>${d.title}</strong> on ${d.show_date} at ${d.show_time} is confirmed.</p>
+      <p>Hi ${escapeHtml(d.name)},</p>
+      <p>Your booking for <strong>${escapeHtml(d.title)}</strong> on ${d.show_date} at ${d.show_time} is confirmed.</p>
       <p>Booking reference: <strong>${d.booking_reference}</strong></p>
       <p>Total paid: ₹${d.total_amount}</p>
       <img src="${qrDataUrl}" alt="Booking QR code" />
@@ -57,15 +68,18 @@ async function buildWaitlistOfferEmail(outboxRow) {
   if (d.status !== 'offered') return { skip: true };
 
   const token = issueOfferToken(d.id, d.offer_expires_at);
-  const baseUrl = process.env.CLIENT_URL || 'http://localhost:4000';
-  const link = `${baseUrl}/offers/${token}/confirm`;
+  // Points at the frontend's offer-claim screen (which reads ?offerToken=
+  // and confirms it), not the backend's POST-only confirm endpoint directly
+  // — a browser can't POST just by following a link.
+  const baseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const link = `${baseUrl}/?offerToken=${token}`;
 
   return {
     to: d.email,
     subject: `A seat is available: ${d.title}`,
     html: `
-      <p>Hi ${d.name},</p>
-      <p>A seat just opened up for <strong>${d.title}</strong> on ${d.show_date} at ${d.show_time}.</p>
+      <p>Hi ${escapeHtml(d.name)},</p>
+      <p>A seat just opened up for <strong>${escapeHtml(d.title)}</strong> on ${d.show_date} at ${d.show_time}.</p>
       <p>Complete your booking before it expires: <a href="${link}">${link}</a></p>
     `,
   };

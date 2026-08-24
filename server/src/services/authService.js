@@ -20,10 +20,6 @@ async function findUserByEmail(email) {
   return rows[0];
 }
 
-async function verifyPassword(user, password) {
-  return bcrypt.compare(password, user.password_hash);
-}
-
 function issueToken(user) {
   return jwt.sign(
     { userId: user.id, role: user.role },
@@ -37,4 +33,4 @@ function toSafeUser(user) {
   return safeUser;
 }
 
-module.exports = { createUser, findUserByEmail, verifyPassword, issueToken, toSafeUser };
+module.exports = { createUser, findUserByEmail, issueToken, toSafeUser };
