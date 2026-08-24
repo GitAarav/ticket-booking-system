@@ -18,6 +18,11 @@ const loadOwnedEvent = asyncHandler(async (req, res, next) => {
   next();
 });
 
+router.get('/venues', asyncHandler(async (req, res) => {
+  const venues = await venueService.listAllVenuesWithCategories();
+  res.json({ venues });
+}));
+
 router.post('/events', asyncHandler(async (req, res) => {
   const { title, type, description } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
@@ -80,6 +85,11 @@ router.post('/events/:eventId/shows', loadOwnedEvent, asyncHandler(async (req, r
 router.get('/events/:eventId/shows', loadOwnedEvent, asyncHandler(async (req, res) => {
   const shows = await eventService.listShows(req.params.eventId);
   res.json({ shows });
+}));
+
+router.get('/events/:eventId/summary', loadOwnedEvent, asyncHandler(async (req, res) => {
+  const summary = await eventService.getEventBookingSummary(req.params.eventId);
+  res.json({ summary });
 }));
 
 module.exports = router;

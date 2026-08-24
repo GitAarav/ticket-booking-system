@@ -129,7 +129,8 @@ async function getShowDetail(showId) {
 
 async function getShowSeatmap(showId) {
   const { rows } = await pool.query(
-    `SELECT ss.id, ss.status, vs.row_label, vs.seat_number, vs.pos_x, vs.pos_y,
+    `SELECT ss.id, ss.status, ss.held_by_customer_id, ss.held_until,
+            vs.row_label, vs.seat_number, vs.pos_x, vs.pos_y,
             vc.id AS category_id, vc.name AS category_name
      FROM show_seats ss
      JOIN venue_seats vs ON vs.id = ss.venue_seat_id
@@ -148,11 +149,72 @@ async function getShowSeatmap(showId) {
       posX: seat.pos_x,
       posY: seat.pos_y,
       status: seat.status,
+      heldByCustomerId: seat.held_by_customer_id,
+      heldUntil: seat.held_until,
       category: { id: seat.category_id, name: seat.category_name },
     });
   }
 
   return Object.entries(byRow).map(([rowLabel, seats]) => ({ rowLabel, seats }));
+}
+
+async function getEventBookingSummary(eventId) {
+  const { rows: shows } = await pool.query(
+    `SELECT id, show_date, show_time FROM shows WHERE event_id = $1 ORDER BY show_date, show_time`,
+    [eventId]
+  );
+  if (shows.length === 0) {
+    return { showsCount: 0, ticketsSold: 0, totalRevenue: '0.00', occupancyRate: '0.0%', shows: [] };
+  }
+  const showIds = shows.map((s) => s.id);
+
+  const { rows: bookingRows } = await pool.query(
+    `SELECT b.id, b.show_id, b.total_amount, COUNT(bs.show_seat_id)::int AS seat_count
+     FROM bookings b
+     JOIN booking_seats bs ON bs.booking_id = b.id
+     WHERE b.show_id = ANY($1::uuid[]) AND b.status = 'confirmed'
+     GROUP BY b.id, b.show_id, b.total_amount`,
+    [showIds]
+  );
+
+  const { rows: capacityRows } = await pool.query(
+    `SELECT show_id, COUNT(*)::int AS capacity FROM show_seats WHERE show_id = ANY($1::uuid[]) GROUP BY show_id`,
+    [showIds]
+  );
+  const capacityByShow = Object.fromEntries(capacityRows.map((r) => [r.show_id, r.capacity]));
+
+  const perShow = {};
+  for (const s of shows) {
+    perShow[s.id] = {
+      showId: s.id,
+      showDate: s.show_date,
+      showTime: s.show_time,
+      ticketsSold: 0,
+      revenue: 0,
+      capacity: capacityByShow[s.id] || 0,
+    };
+  }
+
+  let totalRevenue = 0;
+  let ticketsSold = 0;
+  let totalCapacity = 0;
+  for (const s of shows) totalCapacity += capacityByShow[s.id] || 0;
+  for (const b of bookingRows) {
+    totalRevenue += Number(b.total_amount);
+    ticketsSold += b.seat_count;
+    perShow[b.show_id].ticketsSold += b.seat_count;
+    perShow[b.show_id].revenue += Number(b.total_amount);
+  }
+
+  const occupancyRate = totalCapacity > 0 ? ((ticketsSold / totalCapacity) * 100).toFixed(1) : '0.0';
+
+  return {
+    showsCount: shows.length,
+    ticketsSold,
+    totalRevenue: totalRevenue.toFixed(2),
+    occupancyRate: `${occupancyRate}%`,
+    shows: Object.values(perShow).map((sh) => ({ ...sh, revenue: sh.revenue.toFixed(2) })),
+  };
 }
 
 module.exports = {
@@ -166,4 +228,5 @@ module.exports = {
   listShowsForEvent,
   getShowDetail,
   getShowSeatmap,
+  getEventBookingSummary,
 };

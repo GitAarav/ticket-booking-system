@@ -9,11 +9,38 @@ async function createVenue({ adminId, name, address }) {
 }
 
 async function listVenues(adminId) {
-  const { rows } = await pool.query(
+  const { rows: venues } = await pool.query(
     `SELECT * FROM venues WHERE admin_id = $1 ORDER BY created_at DESC`,
     [adminId]
   );
-  return rows;
+  if (venues.length === 0) return venues;
+
+  const { rows: categories } = await pool.query(
+    `SELECT * FROM venue_categories WHERE venue_id = ANY($1::uuid[]) ORDER BY name`,
+    [venues.map((v) => v.id)]
+  );
+  const categoriesByVenue = {};
+  for (const category of categories) {
+    if (!categoriesByVenue[category.venue_id]) categoriesByVenue[category.venue_id] = [];
+    categoriesByVenue[category.venue_id].push(category);
+  }
+  return venues.map((venue) => ({ ...venue, categories: categoriesByVenue[venue.id] || [] }));
+}
+
+// Organisers pick a venue when scheduling a show, but venues belong to
+// admins, not organisers — so this is deliberately unscoped (every venue,
+// every admin), unlike listVenues() above which is admin-owned-only.
+async function listAllVenuesWithCategories() {
+  const { rows: venues } = await pool.query(`SELECT * FROM venues ORDER BY name`);
+  const { rows: categories } = await pool.query(`SELECT * FROM venue_categories ORDER BY name`);
+
+  const categoriesByVenue = {};
+  for (const category of categories) {
+    if (!categoriesByVenue[category.venue_id]) categoriesByVenue[category.venue_id] = [];
+    categoriesByVenue[category.venue_id].push(category);
+  }
+
+  return venues.map((venue) => ({ ...venue, categories: categoriesByVenue[venue.id] || [] }));
 }
 
 async function getVenue(id) {
@@ -110,6 +137,7 @@ async function getSeatmap(venueId) {
 module.exports = {
   createVenue,
   listVenues,
+  listAllVenuesWithCategories,
   getVenue,
   updateVenue,
   deleteVenue,
