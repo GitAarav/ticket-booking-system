@@ -98,7 +98,7 @@ Run with `SENDGRID_API_KEY` genuinely unset — not a simulated failure, the act
 - [x] `email_outbox` row created in the same transaction: correct `booking_id`, `type = 'booking_confirmation'`, `status = 'pending'`
 - [x] **Fault isolation, full retry cycle:** watched the outbox row across 5 sweep ticks — `attempts` climbed 1→5, `last_error` correctly showed `"SENDGRID_API_KEY not configured"` each time, final `status = 'failed'` — and the booking's own `status` was re-checked at that point: still `confirmed`, completely unaffected throughout
 - [x] `waitlist_offer` email type also verified: cancelling a booking with an active waiter queued an outbox row with `type = 'waitlist_offer'`, correctly joined to the waitlist entry, same fault-isolated retry behavior
-- [ ] **Real email delivery (an actual message in an actual inbox) — not yet verified, needs a real SendGrid API key.** Everything up to the actual `sgMail.send()` call is proven working (content builds correctly for both email types, QR generates correctly); only the real send itself needs credentials only the project owner can provide (see `DECISIONS.md`).
+- [x] **Real email delivery, verified 2026-08-25 (Checkpoint 12):** with a real SendGrid API key and a verified sender, confirmed a real booking for the project owner's real Gmail address → `[sweep] emails: 1 sent, 0 failed`, `email_outbox` row `status = 'sent'`, and the project owner confirmed the actual email arrived with the correct amount (₹300) and a scannable QR. This was the one requirement in the whole brief that had never been demonstrated end to end — see `DECISIONS.md`.
 
 ## Checkpoint 10 — Real-time seat map
 

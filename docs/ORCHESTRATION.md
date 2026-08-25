@@ -82,29 +82,36 @@ Commit message style: `type: short description`, one logical change per commit, 
 - **Verify:** valid token books; expired token rejected.
 - Results in `TEST_CHECKLIST.md`. Flow traced in `FLOW.md`.
 
-**Checkpoint 9 — QR + email (SendGrid), fault-isolated — ⚠️ code done, one manual step outstanding**
+**Checkpoint 9 — QR + email (SendGrid), fault-isolated — ✅ done**
 - `23` QR generation on confirm · `24` `email_outbox` insert in the same transaction as confirm · `25` SendGrid send via sweep worker
 - **Verify:** real email arrives with scannable QR; then break the SendGrid key and confirm a booking again — **booking must still succeed**.
-- All code built and the fault-isolation half fully verified (see `TEST_CHECKLIST.md`, `DECISIONS.md`) — done with `SENDGRID_API_KEY` genuinely unset, which doubled as "the key is broken" test.
-- **Outstanding:** real email delivery (an actual message in an actual inbox) needs a real SendGrid account — sign up free at sendgrid.com, get an API key, set `SENDGRID_API_KEY` and `EMAIL_FROM` in `server/.env`, then confirm one real booking and check the inbox. This is the one piece only the project owner can do.
+- Fault-isolation verified early with `SENDGRID_API_KEY` genuinely unset (doubled as "the key is broken" test). Real delivery verified 2026-08-25 during Checkpoint 12: a real SendGrid account + verified sender + real booking → the project owner confirmed the actual email arrived with the correct amount and a scannable QR. Results in `TEST_CHECKLIST.md`.
 
-**Checkpoint 10 — Real-time seat map — ⚠️ core mechanism done, Redis path unverified**
+**Checkpoint 10 — Real-time seat map — ⚠️ core mechanism done, Redis path intentionally skipped**
 - `26` in-process emitter + SSE endpoint (via `seatMapSerializer()`) · `27` Redis pub/sub behind the same interface
 - **Verify:** two SSE clients on one show; a hold in one arrives on the other within ~1s.
-- In-process path fully verified with two real simultaneous `curl -N` SSE clients (see `TEST_CHECKLIST.md`). Redis-backed path implemented behind the same interface but needs a live Redis instance to actually test — deferred to Checkpoint 12 (deploy, when Upstash gets provisioned). Also flagged: browser `EventSource` can't set auth headers — a Phase C frontend-integration decision, not fixed now. See `DECISIONS.md`.
+- In-process path fully verified with two real simultaneous `curl -N` SSE clients (see `TEST_CHECKLIST.md`). The Redis-backed path is implemented behind the same interface but deliberately not being provisioned for this deploy — a single free-tier Render instance has no multi-process fan-out problem for the in-process `EventEmitter` to solve, so Upstash would add a dependency with no real benefit here. Also flagged: browser `EventSource` can't set auth headers, so the live frontend falls back to polling every ~4s regardless — a known compromise, not true push. See `DECISIONS.md`.
 
 **Checkpoint 11 — API contract freeze — ✅ done**
 - `28` OpenAPI/Postman doc generated from the real endpoints
 - **Verify:** every endpoint callable in Postman with example payloads. **This doc, not the server source, goes to Antigravity.**
 - `docs/API_CONTRACT.yaml` — 29 endpoints, OpenAPI 3.0, validated with a real validator + spot-checked against the live server. Results in `TEST_CHECKLIST.md`. This is the file to hand to Antigravity for Phase B.
 
-**Checkpoint 12 — Backend deploy — ⏳ blocked on you**
-- `29` Render config + env (Neon, Upstash, SendGrid)
+**Checkpoint 12 — Backend deploy — 🔶 in progress**
+- `29` Render config + env (Supabase, SendGrid)
 - **Verify:** live health check; re-run the full curl sequence against the deployed URL; confirm
-  a real booking sends a real email with a scannable QR to an actual inbox (never verified once
-  so far — SendGrid has never had a real key configured).
-- **Blocked on:** a Render account, a production Neon connection string, an Upstash Redis URL,
-  and a real SendGrid API key + verified sender. None of these can be created by the agent.
+  a real booking sends a real email with a scannable QR to an actual inbox.
+- **Done so far (2026-08-25):**
+  - Production database provisioned on Supabase (Session Pooler connection — the direct/IPv6
+    host doesn't resolve from most networks, including this one; see `DECISIONS.md`). Schema
+    migrated via the app's own `npm run migrate`, verified all 13 tables exist.
+  - `server/src/db/pool.js`'s SSL detection fixed to trigger on any non-localhost host, not by
+    string-matching `sslmode=require` (Supabase's connection string doesn't contain that text).
+  - Real SendGrid account + verified sender + real API key wired into `server/.env` locally and
+    confirmed working: a real booking produced a real email with the correct amount and a
+    scannable QR, delivered to the project owner's actual inbox.
+- **Still blocked on:** a Render account, to actually deploy the backend using the above.
+  Redis/Upstash deliberately skipped — see Checkpoint 10.
 
 ### Phase B — Frontend (Antigravity, against the checkpoint-11 contract)
 
