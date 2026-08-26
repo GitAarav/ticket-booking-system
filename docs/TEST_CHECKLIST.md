@@ -119,6 +119,27 @@ Verified with two genuinely simultaneous, independent SSE connections (`curl -N`
 - [x] Spot-checked against the real running server: `POST /auth/register` with the exact documented example payload → real response matched the documented `AuthResponse` schema exactly
 - [x] Deliberate exclusion documented: `GET /admin/ping` (Checkpoint 1 test scaffolding, never a real feature) is left out of the frozen contract on purpose — see `DECISIONS.md`
 
+## Checkpoint 12 — Backend deploy (Render + Supabase + SendGrid)
+
+Live at `https://ticket-booking-backend-94vk.onrender.com`. Verified with real requests against
+the actual deployed URL, not localhost.
+
+- [x] `GET /health` → `200`, confirming both the deploy and the Supabase DB round-trip
+  (the handler runs a real `SELECT 1`)
+- [x] Full auth smoke test against the live URL: register (admin/organiser/customer), wrong
+  password → `401`, no-token request to a guarded route → `401`
+- [x] Real venue → category → seats → event → show setup, end to end, against the deployed DB
+- [x] **Concurrency, over real network latency this time:** 5 simultaneous `POST /hold` requests
+  on the same seat against the live Render URL → exactly one `201`, four `409` — same guarantee
+  as the original localhost test, now proven under an actual network round-trip to Supabase
+- [x] Hold → confirm produced a real booking; the deployed sweep job picked up the resulting
+  `email_outbox` row on its own schedule and reached `status = 'sent'` — confirms `node-cron`
+  actually runs in the Render environment and the real `SENDGRID_API_KEY` works from there too.
+  (Real inbox delivery with the correct amount and a scannable QR was proven earlier locally
+  with the same key — see Checkpoint 9.)
+- [x] All test data (venues/events/shows/bookings/test users) cleaned up from the production
+  database after verification
+
 ## Checkpoint 19 — wire frontend to backend, fix contract drift
 
 Frontend integration surfaced its own set of real bugs (documented in `DECISIONS.md`), plus two
@@ -135,7 +156,5 @@ gaps in the frozen API contract that needed syncing back.
 
 ## Not yet reached
 
-Checkpoints 12, 20–24 (deploy, e2e pass on the live deployment, README finalization, the
+Checkpoints 20–24 (frontend deploy, full e2e pass on the live pair, README finalization, the
 system design write-up, seed data) — see `ORCHESTRATION.md` for what each will need to verify.
-Checkpoint 12 is blocked on Render/Neon/Upstash/SendGrid credentials only the project owner can
-provide.

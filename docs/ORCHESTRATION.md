@@ -97,21 +97,20 @@ Commit message style: `type: short description`, one logical change per commit, 
 - **Verify:** every endpoint callable in Postman with example payloads. **This doc, not the server source, goes to Antigravity.**
 - `docs/API_CONTRACT.yaml` — 29 endpoints, OpenAPI 3.0, validated with a real validator + spot-checked against the live server. Results in `TEST_CHECKLIST.md`. This is the file to hand to Antigravity for Phase B.
 
-**Checkpoint 12 — Backend deploy — 🔶 in progress**
+**Checkpoint 12 — Backend deploy — ✅ done**
 - `29` Render config + env (Supabase, SendGrid)
-- **Verify:** live health check; re-run the full curl sequence against the deployed URL; confirm
-  a real booking sends a real email with a scannable QR to an actual inbox.
-- **Done so far (2026-08-25):**
-  - Production database provisioned on Supabase (Session Pooler connection — the direct/IPv6
-    host doesn't resolve from most networks, including this one; see `DECISIONS.md`). Schema
-    migrated via the app's own `npm run migrate`, verified all 13 tables exist.
-  - `server/src/db/pool.js`'s SSL detection fixed to trigger on any non-localhost host, not by
-    string-matching `sslmode=require` (Supabase's connection string doesn't contain that text).
-  - Real SendGrid account + verified sender + real API key wired into `server/.env` locally and
-    confirmed working: a real booking produced a real email with the correct amount and a
-    scannable QR, delivered to the project owner's actual inbox.
-- **Still blocked on:** a Render account, to actually deploy the backend using the above.
+- Live at `https://ticket-booking-backend-94vk.onrender.com`
+- Production database provisioned on Supabase (Session Pooler connection — the direct/IPv6
+  host doesn't resolve from most networks, including the one this was built on; see
+  `DECISIONS.md`). `server/src/db/pool.js`'s SSL detection fixed to trigger on any non-localhost
+  host, not by string-matching `sslmode=require` (Supabase's string doesn't contain that text).
   Redis/Upstash deliberately skipped — see Checkpoint 10.
+- **Verify:** live health check (`200`, DB round-trip via `SELECT 1`) ✓. Full curl sequence
+  against the deployed URL — register/login/role-guard, venue/event/show setup, concurrency test
+  (5 simultaneous holds on one seat → exactly one `201`, four `409`, over real network latency to
+  Supabase) ✓. A real booking confirmed the deployed sweep job actually runs and calls SendGrid
+  successfully (`email_outbox` reached `status = 'sent'`) ✓ — real inbox delivery was proven
+  earlier against `server/.env` locally with the same key. Results in `TEST_CHECKLIST.md`.
 
 ### Phase B — Frontend (Antigravity, against the checkpoint-11 contract)
 
@@ -163,6 +162,6 @@ not achieved in that order.
 
 - [ ] Zip of source (single repo, `/server` + `/client`)
 - [ ] README: setup, `.env.example`, API docs, DB schema, hold/waitlist explanation
-- [ ] Hosted URL — backend (Render) + frontend (Vercel)
+- [x] Hosted URL — backend (Render): `https://ticket-booking-backend-94vk.onrender.com` — [ ] frontend (Vercel)
 - [ ] ≤800-word system design write-up (derived from `SYSTEM_DESIGN.md`)
-- [ ] ≥20 commits, sole authorship, no co-author trailer
+- [x] ≥20 commits, sole authorship, no co-author trailer
